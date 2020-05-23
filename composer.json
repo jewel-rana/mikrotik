@@ -16,7 +16,8 @@
         "pear2/net_routeros": "*@beta",
         "pear2/cache_shm": "*@alpha",
         "pear2/console_commandline": "*@alpha",
-        "pear2/console_color": "dev-master"
+        "pear2/console_color": "dev-master",
+        "pear2/net_transmitter": ">=1.0.0b1"
     },
     "autoload": {
         "psr-4": {
