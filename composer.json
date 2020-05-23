@@ -11,9 +11,23 @@
     ],
     "minimum-stability": "dev",
     "require": {
+        "php" : ">=5.6",
         "pear2/net_routeros": "*@beta",
         "pear2/cache_shm": "*@alpha",
         "pear2/console_commandline": "*@alpha",
         "pear2/console_color": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rajtika\\Firebase\\": "src"
+        },
+        "files": [
+            "src/FirebaseServiceProvider.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Rajtika\\Firebase\\Test\\": "tests"
+        }
     }
 }
