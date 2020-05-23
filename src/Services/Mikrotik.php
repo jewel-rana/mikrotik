@@ -1,6 +1,7 @@
 <?php
 namespace Rajtika\Mikrotik\Services;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Auth;
 use PEAR2\Console\CommandLine\Exception;
 use PEAR2\Net\RouterOS;
 use PEAR2\Net\RouterOS\Client;
