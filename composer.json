@@ -19,15 +19,15 @@
     },
     "autoload": {
         "psr-4": {
-            "Rajtika\\Firebase\\": "src"
+            "Rajtika\\Mikrotik\\": "src"
         },
         "files": [
-            "src/FirebaseServiceProvider.php"
+            "src/MikrotikServiceProvider.php"
         ]
     },
     "autoload-dev": {
         "psr-4": {
-            "Rajtika\\Firebase\\Test\\": "tests"
+            "Rajtika\\Mikrotik\\Test\\": "tests"
         }
     }
 }
