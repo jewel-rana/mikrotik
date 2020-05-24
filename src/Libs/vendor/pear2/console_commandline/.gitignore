@@ -1,8 +1,0 @@
-/tests/*.out
-/tests/*.diff
-/tests/*.exp
-/tests/*.log
-/tests/*.php
-/tests/*.xdebug
-!/tests/*.inc.php
-/vendor
