@@ -2,7 +2,7 @@
 namespace Rajtika\Mikrotik;
 require_once __DIR__ . '/Libs/mikrotik/core/mapi_routerosapi.php';
 // require_once  __DIR__ . '/../vendor/autoload.php';
-// require_once  __DIR__ . '/Libs/pear2/vendor/autoload.php';
+require_once  __DIR__ . '/Libs/pear2/vendor/autoload.php';
 
 use Illuminate\Support\ServiceProvider;
 use Rajtika\Mikrotik\Services\Mikrotik;
