@@ -13,11 +13,11 @@
     "minimum-stability": "dev",
     "require": {
         "php" : ">=5.6",
-        "pear2/net_routeros": "dev-master",
+        "pear2/net_routeros": "1.0.0b6",
         "pear2/console_color": "dev-master",
-        "pear2/net_transmitter": "dev-master",
-        "pear2/console_commandline": "dev-master",
-        "pear2/cache_shm": "dev-master"
+        "pear2/net_transmitter": "1.0.0b1",
+        "pear2/console_commandline": "0.2.3",
+        "pear2/cache_shm": "0.2.0"
     },
     "autoload": {
         "psr-4": {
