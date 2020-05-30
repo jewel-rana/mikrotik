@@ -163,6 +163,24 @@ class Mikrotik
         return $response;
     }
 
+    public static function interfaces()
+    {
+        $response = array('status' => false, 'msg' => '', 'data' => []);
+        if( self::mikrotik_enabled() ) {
+            self::connect();
+            if( self::$connected == false ) {
+                $response['msg'] = 'Could not connect to router.';
+                $response['status'] = false;
+                return $response;
+            }
+            $response['data'] = self::$client->sendSync(new Request('/interface/print'))->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $response['status'] = true;
+        } else {
+            $response['msg'] = 'Mikrotik configuration is not set.';
+        }
+        return $response;
+    }
+
     /*
     * Get All connections with type ['secret', 'active']
     */
@@ -459,7 +477,7 @@ class Mikrotik
             }
             if ($params['password'] != '') {
                 $customer = new Request('/ppp/secret/set');
-                $customer->setArgument('.id', $params['.id']);
+                $customer->setArgument('.id', $params['id']);
                 $customer->setArgument('password', $params['password']);
                 if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
                     $response['status'] = true;
