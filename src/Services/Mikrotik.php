@@ -379,7 +379,7 @@ class Mikrotik
                 return $response;
             }
             if ($customer !== '') {
-                $mktikId = $customer['mikrotik_id'];
+                $mktikId = '';
                 if( empty( $mktikId ) ) {
                     $customerAcc = self::getByName( $customer->customerID );
                     if( $customerAcc['status'] == true ) {
@@ -424,7 +424,7 @@ class Mikrotik
                 return $response;
             }
             if ($customer != '') :
-                $mktikId = $customer['mikrotik_id'];
+                $mktikId = '';
                 if( $mktikId == '' ) {
                     $user = self::getByName($customer['customerID']);
                     if( !empty($user['.id'] ) ) {
@@ -456,7 +456,7 @@ class Mikrotik
                                 }
                             }
                         }
-                        
+
                         // $util = new Util(self::$client);
                         // $util->setMenu('/ppp active', false)->remove($customer['customerID']);
                         $response['status'] = true;
@@ -489,16 +489,26 @@ class Mikrotik
                 return $response;
             }
             if( $params['name'] != '' ) {
-                $customer = new Request('/ppp/secret/set');
-                $customer->setArgument('.id', $params['id']);
-                $customer->setArgument('name', $params['name']);
-                if( self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL ) {
-                    $response['status'] = true;
-                    $response['msg'] = 'Your CustomerID has been changed';
+                $mktikId = '';
+                if( $mktikId == '' ) {
+                    $user = self::getByName($params['customerID']);
+                    if( !empty($user['.id'] ) ) {
+                        $mktikId = $user['.id'];
+                    }
                 }
-
+                if( !empty($mktikId)) {
+                    $customer = new Request('/ppp/secret/set');
+                    $customer->setArgument('.id', $mktikId);
+                    $customer->setArgument('name', $params['name']);
+                    if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
+                        $response['status'] = true;
+                        $response['msg'] = 'Your CustomerID has been changed';
+                    }
+                } else {
+                    $response['msg'] = 'Mikrotik account not found';
+                }
             } else {
-                $response['msg'] = 'Mikrotik ID not found.';
+                $response['msg'] = 'Customer name not provided';
             }
         } else {
             $response['status'] = true;
@@ -517,13 +527,24 @@ class Mikrotik
                 return $response;
             }
             if ($params['password'] != '') {
-                $customer = new Request('/ppp/secret/set');
-                $customer->setArgument('.id', $params['id']);
-                $customer->setArgument('password', $params['password']);
-                if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
-                    $response['status'] = true;
+                $mktikId = '';
+                if( $mktikId == '' ) {
+                    $user = self::getByName($params['customerID']);
+                    if( !empty($user['.id'] ) ) {
+                        $mktikId = $user['.id'];
+                    }
+                }
+                if( !empty($mktikId)) {
+                    $customer = new Request('/ppp/secret/set');
+                    $customer->setArgument('.id', $mktikId);
+                    $customer->setArgument('password', $params['password']);
+                    if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
+                        $response['status'] = true;
+                    } else {
+                        $response['msg'] = 'Sorry! cannot change password';
+                    }
                 } else {
-                    $response['msg'] = 'Sorry! cannot change password';
+                    $response['msg'] = 'Mikrotik account not found';
                 }
             } else {
                 $response['msg'] = 'Your password is empty';
