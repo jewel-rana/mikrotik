@@ -250,6 +250,34 @@ class Mikrotik
         return $response;
     }
 
+
+    public static function getActive( $name )
+    {
+        $response = ['status' => false, 'msg' => ''];
+        if( self::mikrotik_enabled() ) {
+            self::connect();
+            if( self::$connected == false ) {
+                $response['msg'] = 'Could not connect to router.';
+                return $response;
+            }
+            if( $name != null ) {
+                $customer = new Request('/ppp/active/print');
+                $customer->setQuery(Query::where('name', $name));
+                $info = self::$client->sendSync($customer);
+                if ( !empty( $info[0] ) ) :
+                    $response['status'] = true;
+                    $response['data'] = $info[0];
+                endif;
+            } else {
+                $response['msg'] = 'Mikrotik name not provided!';
+            }
+        } else {
+            $response['msg'] = 'Mikrotik configuration is not set.';
+        }
+
+        return $response;
+    }
+
     public static function getByName( $name = '' ) {
         $response = array('status' => false, 'msg' => '');
         if( self::mikrotik_enabled() ) {
@@ -311,7 +339,7 @@ class Mikrotik
 
     public static function create( $customer ) {
         $response = ['status' => false, 'msg' => '', 'data' => []];
-        //check mikrotike enabled
+        //check mikrotik enabled
         if( self::mikrotik_enabled() ) {
             self::connect();
             if (self::$connected == false) {
@@ -382,7 +410,7 @@ class Mikrotik
             }
         } else {
             $response['status'] = true;
-            $response['msg'] = 'Mikrotike configuration not set.';
+            $response['msg'] = 'Mikrotik configuration not set.';
         }
         return $response;
     }
@@ -410,14 +438,27 @@ class Mikrotik
                     $userAcc->setArgument('disabled', 'yes');
                     $userAcc->setArgument('.proplist', '.id,name,profile,service');
                     if (self::$client->sendSync($userAcc)->getType() === Response::TYPE_FINAL) {
-                        $remove = new RouterOs\Request("/ppp/active/remove");
-                        $remove->setArgument('numbers', $mktikId);
-                        self::$client->sendSync($remove);
-                        // $userAcc = new Request('/ppp/active/remove');
-                        // $userAcc->setArgument('.id', $mktikId);
-                        // self::$client->sendSync($userAcc);
+                        // $remove = new RouterOs\Request("/ppp/active/remove");
+                        // $remove->setArgument('numbers', $mktikId);
+                        // self::$client->sendSync($remove);
+                        $activeCon = self::getActive($customer['customerID']);
+                        // dd( $activeCon['data']['.id']);
+                        if( !empty($activeCon['data'] ) ) {
+                            foreach( $activeCon['data'] as $key => $v ) {
+                                if( $key == ".id" ) {
+                                    $mktikId = $v;
+                                    $userAcc = new Request('/ppp/active/remove');
+                                    $userAcc->setArgument('.id', $mktikId);
+                                    self::$client->sendSync($userAcc);
+                                    /* Working also */
+                                    // $util = new Util(self::$client);
+                                    // $util->setMenu('/ppp active', false)->remove($mktikId);
+                                }
+                            }
+                        }
+                        
                         // $util = new Util(self::$client);
-                        // $util->setMenu('/ppp active')->remove($customer->customerID);
+                        // $util->setMenu('/ppp active', false)->remove($customer['customerID']);
                         $response['status'] = true;
                         $response['msg'] = 'Customer successfully disabled';
 
@@ -432,7 +473,7 @@ class Mikrotik
             endif;
         } else {
             $response['status'] = true;
-            $response['msg'] = 'Mikrotike configuration not set';
+            $response['msg'] = 'Mikrotik configuration not set';
         }
 
         return $response;
@@ -461,7 +502,7 @@ class Mikrotik
             }
         } else {
             $response['status'] = true;
-            $response['msg'] = 'Mikrotike configuration not set.';
+            $response['msg'] = 'Mikrotik configuration not set.';
         }
 
         return $response;
@@ -489,7 +530,7 @@ class Mikrotik
             }
         } else {
             $response['status'] = true;
-            $response['msg'] = 'Mikrotike configuration not set.';
+            $response['msg'] = 'Mikrotik configuration not set.';
         }
         return $response;
     }
@@ -520,7 +561,7 @@ class Mikrotik
             }
         } else {
             $response['status'] = true;
-            $response['msg'] = 'Mikrotike configuration not set.';
+            $response['msg'] = 'Mikrotik configuration not set.';
         }
 
         return $response;
