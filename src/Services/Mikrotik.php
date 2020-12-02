@@ -21,7 +21,7 @@ class Mikrotik
     protected static $client;
     /**
      * @var bool
-    */
+     */
     private static $connected = false;
 
     public function __construct()
@@ -106,8 +106,8 @@ class Mikrotik
             self::connect();
             if( self::$connected ) {
                 $torchRequest = new Request('/tool torch duration=2');
-               // $torchRequest->setArgument('interface', 'ether8');
-                 $torchRequest->setArgument('interface', $name);
+                // $torchRequest->setArgument('interface', 'ether8');
+                $torchRequest->setArgument('interface', $name);
                 $data = self::$client->sendSync($torchRequest);
             }
         }
@@ -343,13 +343,12 @@ class Mikrotik
         if( self::mikrotik_enabled() ) {
             self::connect();
             if (self::$connected == false) {
-                $response['msg'] = 'Router not connected';
-                return $response;
+                throw new \Exception("Router not connected", 1);
             }
             $user = new Request('/ppp/secret/add');
             $user->setArgument('name', $customer->customerID);
             $user->setArgument('profile', $customer->package['code']);
-            $user->setArgument('password', $customer->user->mobile);
+            $user->setArgument('password', $customer->password);
             $user->setArgument('service', self::$service);
             $user->setArgument('comment', 'Via api [pkg - ' . $customer->package->name . ', price- ' . $customer->package['price'] . 'Tk., date- ' . date('d/m/Y'));
             $user->setArgument('disabled', 'no');
@@ -427,8 +426,12 @@ class Mikrotik
                 $mktikId = '';
                 if( $mktikId == '' ) {
                     $user = self::getByName($customer['customerID']);
-                    if( !empty($user['.id'] ) ) {
-                        $mktikId = $user['.id'];
+                    if( !empty($user['data'] ) ) {
+                        foreach( $user['data'] as $key => $v ) {
+                            if( $key == ".id" ) {
+                                $mktikId = $v;
+                            }
+                        }
                     }
                 }
 
@@ -492,8 +495,8 @@ class Mikrotik
                 $mktikId = '';
                 if( $mktikId == '' ) {
                     $user = self::getByName($params['customerID']);
-                    if( !empty($user['.id'] ) ) {
-                        $mktikId = $user['.id'];
+                    if( $user['status'] == true ) {
+                        $mktikId = $user['data']->getProperty('.id');
                     }
                 }
                 if( !empty($mktikId)) {
@@ -530,8 +533,8 @@ class Mikrotik
                 $mktikId = '';
                 if( $mktikId == '' ) {
                     $user = self::getByName($params['customerID']);
-                    if( !empty($user['.id'] ) ) {
-                        $mktikId = $user['.id'];
+                    if( $user['status'] == true ) {
+                        $mktikId = $user['data']->getProperty('.id');
                     }
                 }
                 if( !empty($mktikId)) {
@@ -591,9 +594,7 @@ class Mikrotik
     private static function mikrotik_enabled()
     {
         if ( getOption('mikrotik_access') ) {
-            if( !empty( self::$host ) && !empty( self::$user ) && self::$password && self::$port ) {
-                return true;
-            }
+            return true;
         }
         return false;
     }
