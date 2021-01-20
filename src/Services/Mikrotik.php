@@ -343,13 +343,19 @@ class Mikrotik
         if( self::mikrotik_enabled() ) {
             self::connect();
             if (self::$connected == false) {
-                throw new \Exception("Router not connected", 1);
+                throw new Exception("Router not connected", 1);
             }
             $user = new Request('/ppp/secret/add');
             $user->setArgument('name', $customer->customerID);
             $user->setArgument('profile', $customer->package['code']);
             $user->setArgument('password', $customer->password);
             $user->setArgument('service', self::$service);
+            if($customer->remote_ip) {
+                $user->setArgument('remote_address', $customer->remote_ip);
+            }
+            if($customer->remote_mac) {
+                $user->setArgument('physical_address', $customer->remote_mac);
+            }
             $user->setArgument('comment', 'Via api [pkg - ' . $customer->package->name . ', price- ' . $customer->package['price'] . 'Tk., date- ' . date('d/m/Y'));
             $user->setArgument('disabled', 'no');
 
@@ -380,29 +386,31 @@ class Mikrotik
             if ($customer !== '') {
                 $mktikId = '';
                 if( empty( $mktikId ) ) {
-                    $customerAcc = self::getByName( $customer->customerID );
+                    $customerAcc = self::getByName( $customer['customerID'] );
                     if( $customerAcc['status'] == true ) {
                         $mktikId = $customerAcc['data']->getProperty('.id');
                     }
                 }
                 if (!empty( $mktikId ) ) {
-                    $customer = new Request('/ppp/secret/set');
-                    $customer->setArgument('.id', $mktikId);
-                    $customer->setArgument('disabled', 'no');
-                    $customer->setArgument('.proplist', '.id,name,profile,service');
-                    if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
+                    $user = new Request('/ppp/secret/set');
+                    $user->setArgument('.id', $mktikId);
+                    $user->setArgument('disabled', 'no');
+                    if (self::$client->sendSync($user)->getType() === Response::TYPE_FINAL) {
                         $response['status'] = true;
+                        $response['msg'] = 'Mikrotik! Customer has been enabled.';
                     } else {
                         $response['msg'] = 'Mikrotik! Customer cannot be enabled.';
                     }
                 } else {
-                    $newAcc = self::create( $customer );
-                    if( $newAcc['status'] == true ) {
-                        $response['status'] = true;
-                        $response['msg'] = 'Customer added to mikrotik';
-                    } else {
-                        $response['msg'] = 'Mikrotik ID not set.';
-                    }
+                    $response['msg'] = 'Could not find customer into router';
+//                    throw new \Exception("Cannot find customer into router");
+//                    $newAcc = self::create( $customer );
+//                    if( $newAcc['status'] == true ) {
+//                        $response['status'] = true;
+//                        $response['msg'] = 'Customer added to mikrotik';
+//                    } else {
+//                        $response['msg'] = 'Mikrotik ID not set.';
+//                    }
                 }
             } else {
                 $response['msg'] = 'Customer not found.';
@@ -533,8 +541,8 @@ class Mikrotik
                 $mktikId = '';
                 if( $mktikId == '' ) {
                     $user = self::getByName($params['customerID']);
-                    if( $user['status'] == true ) {
-                        $mktikId = $user['data']->getProperty('.id');
+                    if( !empty($user['.id'] ) ) {
+                        $mktikId = $user['.id'];
                     }
                 }
                 if( !empty($mktikId)) {
