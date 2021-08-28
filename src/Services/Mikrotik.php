@@ -19,6 +19,7 @@ class Mikrotik
     protected static $password;
     protected static $service;
     protected static $client;
+    public static $customer_exist = false;
     /**
      * @var bool
      */
@@ -607,20 +608,23 @@ class Mikrotik
         return false;
     }
 
-    private function _exist( $params ) {
+    public static function _exist( $params ) {
         self::connect();
         if( self::$connected == false ) {
             $this->customer_exist = false;
+            return false;
         }
         if( $params['name'] ) {
             $customer = new Request('/ppp/secret/getall');
             $customer->setArgument('.proplist', '.id,name,profile,service');
             $customer->setQuery(Query::where('name', $params['name']));
             $id = self::$client->sendSync($customer)->getProperty('.id');
-            if( !empty($id) && is_array($id) ) {
-                $this->customer_exist = true;
+            if( !empty($id) || is_array($id) ) {
+                self::$customer_exist = true;
+                return true;
             }
         }
+        return false;
     }
 
     public static function reboot()
