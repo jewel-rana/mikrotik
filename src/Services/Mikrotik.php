@@ -542,8 +542,8 @@ class Mikrotik
                 $mktikId = '';
                 if( $mktikId == '' ) {
                     $user = self::getByName($params['customerID']);
-                    if( !empty($user['.id'] ) ) {
-                        $mktikId = $user['.id'];
+                    if( $user['status'] == true ) {
+                        $mktikId = $user['data']->getProperty('.id');
                     }
                 }
                 if( !empty($mktikId)) {
