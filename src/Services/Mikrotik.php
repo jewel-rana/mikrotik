@@ -50,7 +50,7 @@ class Mikrotik
 
     private static function init()
     {
-        $router = Auth::user()->router;
+        $router = Auth::check() ? Auth::user()->router : null;
         if( $router !== null ) {
             self::$host =  $router['mktik_host'];
             self::$port = $router['mktik_port'] ?? '8728';
