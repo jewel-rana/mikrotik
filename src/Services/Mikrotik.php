@@ -1,5 +1,7 @@
 <?php
+
 namespace Rajtika\Mikrotik\Services;
+
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
 use PEAR2\Console\CommandLine\Exception;
@@ -19,18 +21,16 @@ class Mikrotik
     protected static $password;
     protected static $service;
     protected static $client;
-    public static $customer_exist = false;
-    /**
-     * @var bool
-     */
-    private static $connected = false;
+    public static bool $customer_exist = false;
+    private static bool $connected = false;
 
     public function __construct()
     {
         self::init();
     }
 
-    public static function dump() {
+    public static function dump()
+    {
 //        self::connect();
 //        if( self::$connected ) {
 //
@@ -44,15 +44,15 @@ class Mikrotik
 //            $response = self::$client->write($query)->read();
 //            dd($response);
 //        }
-        dd( self::monitor('sojib'));
-        dd( 'Dump from Mikrotik Services for Pear2');
+        dd(self::monitor('sojib'));
+        dd('Dump from Mikrotik Services for Pear2');
     }
 
     private static function init()
     {
-        $router = Auth::check() ? Auth::user()->router : null;
-        if( $router !== null ) {
-            self::$host =  $router['mktik_host'];
+        $router = auth()->check() ? Auth::user()->router : null;
+        if ($router !== null) {
+            self::$host = $router['mktik_host'];
             self::$port = $router['mktik_port'] ?? '8728';
             self::$user = $router['mktik_user'];
             self::$password = $router['mktik_password'];
@@ -60,10 +60,10 @@ class Mikrotik
         }
     }
 
-    public static function _set( $router )
+    public static function _set($router)
     {
-        if( $router !== null ) {
-            self::$host =  $router['mktik_host'];
+        if ($router !== null) {
+            self::$host = $router['mktik_host'];
             self::$port = $router['mktik_port'] ?? '8728';
             self::$user = $router['mktik_user'];
             self::$password = $router['mktik_password'];
@@ -73,13 +73,11 @@ class Mikrotik
 
     public static function connect()
     {
-        // dd( self::$host . '-' . self::$user . '-' . self::$port);
-        if( !empty( self::$host ) && !empty( self::$user ) && !empty( self::$password ) ) {
+        if (!empty(self::$host) && !empty(self::$user) && !empty(self::$password)) {
             try {
-                // dd( self::$host . '-' . self::$user . '-' . self::$port);
                 self::$client = new Client(self::$host, self::$user, self::$password, self::$port);
                 self::$connected = true;
-            } catch (Exception $e) {
+            } catch (\Exception $exception) {
                 self::$connected = false;
             }
         } else {
@@ -90,21 +88,21 @@ class Mikrotik
     public static function getStatus()
     {
         self::connect();
-        if( self::$connected ) {
+        if (self::$connected) {
             $responses = self::$client->sendSync(new Request('/interface pppoe-client monitor numbers=pppoe-out1 once'));
 
-            foreach ($responses as $item){
+            foreach ($responses as $item) {
                 echo 'Status :', $item->getProperty('status');
             }
         }
     }
 
-    public static function torch( $name = null )
+    public static function torch($name = null): array
     {
         $data = [];
-        if( $name !== null ) {
+        if ($name !== null) {
             self::connect();
-            if( self::$connected ) {
+            if (self::$connected) {
                 $torchRequest = new Request('/tool torch duration=2');
                 // $torchRequest->setArgument('interface', 'ether8');
                 $torchRequest->setArgument('interface', $name);
@@ -115,11 +113,11 @@ class Mikrotik
         return $data;
     }
 
-    public static function monitor()
+    public static function monitor(): array
     {
         $data = [];
         self::connect();
-        if( self::$connected ) {
+        if (self::$connected) {
             // /interface/monitor-traffic interface=eathernet
             $responses = self::$client->sendSync(new Request('/interface pppoe-client monitor numbers=ether8'));
             $data = $responses;
@@ -128,30 +126,30 @@ class Mikrotik
         return $data;
     }
 
-    public static function resource()
+    public static function resource(): object
     {
         $data = [];
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
             }
             $data = self::$client->sendSync(new Request('/system/resource/print'))->getAllOfType(RouterOS\Response::TYPE_DATA);
         }
         return $data;
     }
 
-    public static function logs()
+    public static function logs(): array
     {
         $response = array('status' => false, 'msg' => '');
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 $response['status'] = false;
                 return $response;
             }
-            try{
-                $util = new Util( self::$client );
+            try {
+                $util = new Util(self::$client);
                 $response['status'] = true;
                 $response['data'] = $util->setMenu('/log')->getAll();
             } catch (Exception $e) {
@@ -163,12 +161,12 @@ class Mikrotik
         return $response;
     }
 
-    public static function interfaces()
+    public static function interfaces(): array
     {
         $response = array('status' => false, 'msg' => '', 'data' => []);
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 $response['status'] = false;
                 return $response;
@@ -184,12 +182,12 @@ class Mikrotik
     /*
     * Get All connections with type ['secret', 'active']
     */
-    public static function getAll( $type = 'inactive')
+    public static function getAll($type = 'inactive'): array
     {
         $response = array('status' => false, 'msg' => '', 'data' => []);
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 $response['status'] = false;
                 return $response;
@@ -205,12 +203,12 @@ class Mikrotik
     /*
     * Get All connections with type ['secret', 'active']
     */
-    public static function getAll2( $type = 'inactive')
+    public static function getAll2($type = 'inactive'): array
     {
         $response = array('status' => false, 'msg' => '', 'data' => []);
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 $response['status'] = false;
                 return $response;
@@ -223,20 +221,20 @@ class Mikrotik
         return $response;
     }
 
-    public static function get( $id = null )
+    public static function get($id = null): array
     {
         $response = ['status' => false, 'msg' => ''];
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 return $response;
             }
-            if( $id != null ) {
+            if ($id != null) {
                 $customer = new Request('/ppp/secret/getall detail=""');
                 $customer->setQuery(Query::where('.id', $id));
                 $info = self::$client->sendSync($customer);
-                if ( !empty( $info[0] ) ) :
+                if (!empty($info[0])) :
                     $response['status'] = true;
                     $response['data'] = $info[0];
                 endif;
@@ -251,20 +249,20 @@ class Mikrotik
     }
 
 
-    public static function getActive( $name )
+    public static function getActive($name): array
     {
         $response = ['status' => false, 'msg' => ''];
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 return $response;
             }
-            if( $name != null ) {
+            if ($name != null) {
                 $customer = new Request('/ppp/active/print');
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
-                if ( !empty( $info[0] ) ) :
+                if (!empty($info[0])) :
                     $response['status'] = true;
                     $response['data'] = $info[0];
                 endif;
@@ -278,21 +276,22 @@ class Mikrotik
         return $response;
     }
 
-    public static function getByName( $name = '' ) {
+    public static function getByName($name = ''): array
+    {
         $response = array('status' => false, 'msg' => '');
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 return $response;
             }
 
-            if( $name ) :
+            if ($name) :
                 $customer = new Request('/ppp/secret/getall');
                 $customer->setArgument('.proplist', '.id,name,profile,disabled');
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
-                if ( !empty( $info[0] ) ) :
+                if (!empty($info[0])) :
                     $response['status'] = true;
                     $response['data'] = $info[0];
                 endif;
@@ -310,21 +309,22 @@ class Mikrotik
     * Reference
     * $service = $client->sendSync(new Request('/interface/pppoe-server/print', RouterOS\Query::where('name', $ppp('name')))->getArgument('service');
     */
-    public static function getServerByName( $name = '' ) {
+    public static function getServerByName($name = ''): array
+    {
         $response = array('status' => false, 'msg' => '');
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router.';
                 return $response;
             }
 
-            if( $name ) :
+            if ($name) :
                 $customer = new Request('/interface/pppoe-server/print');
                 $customer->setArgument('.proplist', '.id,name,profile,disabled,service');
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
-                if ( !empty( $info[0] ) ) :
+                if (!empty($info[0])) :
                     $response['status'] = true;
                     $response['data'] = $info[0];
                 endif;
@@ -337,12 +337,13 @@ class Mikrotik
         return $response;
     }
 
-    public static function create( $customer ) {
+    public static function create($customer): array
+    {
         $response = ['status' => false, 'msg' => '', 'data' => []];
         //check mikrotik enabled
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if (self::$connected == false) {
+            if (!self::$connected) {
                 throw new Exception("Router not connected", 1);
             }
             $user = new Request('/ppp/secret/add');
@@ -350,10 +351,10 @@ class Mikrotik
             $user->setArgument('profile', $customer->package['code']);
             $user->setArgument('password', $customer->password);
             $user->setArgument('service', self::$service);
-            if($customer->remote_ip) {
+            if ($customer->remote_ip) {
                 $user->setArgument('remote_address', $customer->remote_ip);
             }
-            if($customer->remote_mac) {
+            if ($customer->remote_mac) {
                 $user->setArgument('physical_address', $customer->remote_mac);
             }
             $user->setArgument('comment', 'Via api [pkg - ' . $customer->package->name . ', price- ' . $customer->package['price'] . 'Tk., date- ' . date('d/m/Y'));
@@ -363,8 +364,8 @@ class Mikrotik
                 $response['msg'] = 'Sorry! cannot create customer';
             } else {
 //                self::$client->loop();
-                $customerAcc = self::getByName( $customer->customerID );
-                $response['data'] = ( $customerAcc['status'] == true ) ? $customerAcc['data'] : null;
+                $customerAcc = self::getByName($customer->customerID);
+                $response['data'] = $customerAcc['status'] ? $customerAcc['data'] : null;
                 $response['status'] = true;
                 $response['msg'] = 'Customer has been successfully created';
             }
@@ -375,23 +376,24 @@ class Mikrotik
         return $response;
     }
 
-    public static function enable( $customer = '' ) {
+    public static function enable($customer = ''): array
+    {
         $response = ['status' => false, 'msg' => '', 'data' => []];
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if (self::$connected == false) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router';
                 return $response;
             }
             if ($customer !== '') {
                 $mktikId = '';
-                if( empty( $mktikId ) ) {
-                    $customerAcc = self::getByName( $customer['customerID'] );
-                    if( $customerAcc['status'] == true ) {
+                if (empty($mktikId)) {
+                    $customerAcc = self::getByName($customer['customerID']);
+                    if ($customerAcc['status']) {
                         $mktikId = $customerAcc['data']->getProperty('.id');
                     }
                 }
-                if (!empty( $mktikId ) ) {
+                if (!empty($mktikId)) {
                     $user = new Request('/ppp/secret/set');
                     $user->setArgument('.id', $mktikId);
                     $user->setArgument('disabled', 'no');
@@ -403,14 +405,6 @@ class Mikrotik
                     }
                 } else {
                     $response['msg'] = 'Could not find customer into router';
-//                    throw new \Exception("Cannot find customer into router");
-//                    $newAcc = self::create( $customer );
-//                    if( $newAcc['status'] == true ) {
-//                        $response['status'] = true;
-//                        $response['msg'] = 'Customer added to mikrotik';
-//                    } else {
-//                        $response['msg'] = 'Mikrotik ID not set.';
-//                    }
                 }
             } else {
                 $response['msg'] = 'Customer not found.';
@@ -422,54 +416,45 @@ class Mikrotik
         return $response;
     }
 
-    public static function disable( $customer = '' ) {
+    public static function disable($customer = ''): array
+    {
         $response = ['status' => true, 'msg' => 'Cannot disable customer'];
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if (self::$connected == false) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router';
                 return $response;
             }
             if ($customer != '') :
+                $user = self::getByName($customer['customerID']);
                 $mktikId = '';
-                if( $mktikId == '' ) {
-                    $user = self::getByName($customer['customerID']);
-                    if( !empty($user['data'] ) ) {
-                        foreach( $user['data'] as $key => $v ) {
-                            if( $key == ".id" ) {
-                                $mktikId = $v;
-                            }
+                if (!empty($user['data'])) {
+                    foreach ($user['data'] as $key => $v) {
+                        if ($key == ".id") {
+                            $mktikId = $v;
                         }
                     }
                 }
 
-                if (!empty( $mktikId ) ) {
+                if (!empty($mktikId)) {
                     $userAcc = new Request('/ppp/secret/set');
                     $userAcc->setArgument('.id', $mktikId);
                     $userAcc->setArgument('disabled', 'yes');
                     $userAcc->setArgument('.proplist', '.id,name,profile,service');
                     if (self::$client->sendSync($userAcc)->getType() === Response::TYPE_FINAL) {
-                        // $remove = new RouterOs\Request("/ppp/active/remove");
-                        // $remove->setArgument('numbers', $mktikId);
-                        // self::$client->sendSync($remove);
                         $activeCon = self::getActive($customer['customerID']);
                         // dd( $activeCon['data']['.id']);
-                        if( !empty($activeCon['data'] ) ) {
-                            foreach( $activeCon['data'] as $key => $v ) {
-                                if( $key == ".id" ) {
+                        if (!empty($activeCon['data'])) {
+                            foreach ($activeCon['data'] as $key => $v) {
+                                if ($key == ".id") {
                                     $mktikId = $v;
                                     $userAcc = new Request('/ppp/active/remove');
                                     $userAcc->setArgument('.id', $mktikId);
                                     self::$client->sendSync($userAcc);
-                                    /* Working also */
-                                    // $util = new Util(self::$client);
-                                    // $util->setMenu('/ppp active', false)->remove($mktikId);
                                 }
                             }
                         }
 
-                        // $util = new Util(self::$client);
-                        // $util->setMenu('/ppp active', false)->remove($customer['customerID']);
                         $response['status'] = true;
                         $response['msg'] = 'Customer successfully disabled';
 
@@ -490,24 +475,24 @@ class Mikrotik
         return $response;
     }
 
-    public static function changeName( $params = array() ) {
+    public static function changeName($params = array()): array
+    {
         $response = ['status' => false, 'msg' => 'Cannot change customerID'];
 
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if( self::$connected == false ) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router';
                 return $response;
             }
-            if( $params['name'] != '' ) {
+            if ($params['name'] != '') {
                 $mktikId = '';
-                if( $mktikId == '' ) {
-                    $user = self::getByName($params['customerID']);
-                    if( $user['status'] == true ) {
-                        $mktikId = $user['data']->getProperty('.id');
-                    }
+                $user = self::getByName($params['customerID']);
+                if ($user['status']) {
+                    $mktikId = $user['data']->getProperty('.id');
                 }
-                if( !empty($mktikId)) {
+
+                if (!empty($mktikId)) {
                     $customer = new Request('/ppp/secret/set');
                     $customer->setArgument('.id', $mktikId);
                     $customer->setArgument('name', $params['name']);
@@ -529,23 +514,22 @@ class Mikrotik
         return $response;
     }
 
-    public static function changePassword( $params = array() ) {
+    public static function changePassword($params = array()): array
+    {
         $response = ['status' => false, 'msg' => ''];
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if (self::$connected == false) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router';
                 return $response;
             }
             if ($params['password'] != '') {
                 $mktikId = '';
-                if( $mktikId == '' ) {
-                    $user = self::getByName($params['customerID']);
-                    if( $user['status'] == true ) {
-                        $mktikId = $user['data']->getProperty('.id');
-                    }
+                $user = self::getByName($params['customerID']);
+                if ($user['status']) {
+                    $mktikId = $user['data']->getProperty('.id');
                 }
-                if( !empty($mktikId)) {
+                if (!empty($mktikId)) {
                     $customer = new Request('/ppp/secret/set');
                     $customer->setArgument('.id', $mktikId);
                     $customer->setArgument('password', $params['password']);
@@ -570,11 +554,12 @@ class Mikrotik
     /**
      * Change Profile means Change the Packege
      **/
-    public static function changeProfile( $params = array() ) {
+    public static function changeProfile($params = array()): array
+    {
         $response = ['status' => false, 'msg' => ''];
-        if( self::mikrotik_enabled() ) {
+        if (self::mikrotik_enabled()) {
             self::connect();
-            if (self::$connected == false) {
+            if (!self::$connected) {
                 $response['msg'] = 'Could not connect to router';
                 return $response;
             }
@@ -599,26 +584,26 @@ class Mikrotik
         return $response;
     }
 
-    private static function mikrotik_enabled()
+    private static function mikrotik_enabled(): bool
     {
-        if ( getOption('mikrotik_access') ) {
+        if (getOption('mikrotik_access')) {
             return true;
         }
         return false;
     }
 
-    public static function _exist( $params ) {
+    public static function _exist($params): bool
+    {
         self::connect();
-        if( self::$connected == false ) {
-            $this->customer_exist = false;
+        if (!self::$connected) {
             return false;
         }
-        if( $params['name'] ) {
+        if ($params['name']) {
             $customer = new Request('/ppp/secret/getall');
             $customer->setArgument('.proplist', '.id,name,profile,service');
             $customer->setQuery(Query::where('name', $params['name']));
             $id = self::$client->sendSync($customer)->getProperty('.id');
-            if( !empty($id) || is_array($id) ) {
+            if (!empty($id) || is_array($id)) {
                 self::$customer_exist = true;
                 return true;
             }
@@ -630,7 +615,7 @@ class Mikrotik
     {
         self::connect();
 
-        if( self::$connected ) {
+        if (self::$connected) {
             $request = new Request(
                 '/system scheduler add name=REBOOT interval=2s
                 on-event="/system scheduler remove REBOOT;/system reboot"'
@@ -641,7 +626,6 @@ class Mikrotik
 
     public function __destruct()
     {
-        // unset(self::$client);
         self::$client = null;
     }
 }
