@@ -80,7 +80,6 @@ class Mikrotik
                 self::$client = new Client(self::$host, self::$user, self::$password, self::$port);
                 self::$connected = true;
             } catch (Exception $e) {
-                dd( $e->getMessage() );
                 self::$connected = false;
             }
         } else {
