@@ -97,7 +97,7 @@ class Mikrotik
         }
     }
 
-    public static function torch($name = null): array
+    public static function torch($name = null)
     {
         $data = [];
         if ($name !== null) {
