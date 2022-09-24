@@ -97,9 +97,9 @@ class Mikrotik
         }
     }
 
-    public static function torch($name = null)
+    public static function torch($name = null): object
     {
-        $data = [];
+        $data = null;
         if ($name !== null) {
             self::connect();
             if (self::$connected) {
@@ -113,9 +113,9 @@ class Mikrotik
         return $data;
     }
 
-    public static function monitor(): array
+    public static function monitor()
     {
-        $data = [];
+        $data = null;
         self::connect();
         if (self::$connected) {
             // /interface/monitor-traffic interface=eathernet
@@ -128,7 +128,7 @@ class Mikrotik
 
     public static function resource(): object
     {
-        $data = [];
+        $data = null;
         if (self::mikrotik_enabled()) {
             self::connect();
             if (!self::$connected) {
