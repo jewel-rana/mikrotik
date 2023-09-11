@@ -351,12 +351,12 @@ class Mikrotik
             $user->setArgument('profile', $customer->package['code']);
             $user->setArgument('password', $customer->password);
             $user->setArgument('service', self::$service);
-            if ($customer->remote_ip) {
-                $user->setArgument('remote_address', $customer->remote_ip);
-            }
-            if ($customer->remote_mac) {
-                $user->setArgument('physical_address', $customer->remote_mac);
-            }
+            // if ($customer->remote_ip) {
+            //     $user->setArgument('remote_address', $customer->remote_ip);
+            // }
+            // if ($customer->remote_mac) {
+            //     $user->setArgument('physical_address', $customer->remote_mac);
+            // }
             $user->setArgument('comment', 'Via api [pkg - ' . $customer->package->name . ', price- ' . $customer->package['price'] . 'Tk., date- ' . date('d/m/Y'));
             $user->setArgument('disabled', 'no');
 
