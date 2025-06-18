@@ -346,6 +346,10 @@ class Mikrotik
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
                 if (!empty($info[0])) :
+                    Log::error('MIKROTIK_GET_SERVER_NAME', [
+                        'name' => $name,
+                        'response' => $info
+                    ]);
                     $response['status'] = true;
                     $response['data'] = $info[0];
                 endif;
@@ -362,7 +366,7 @@ class Mikrotik
     {
         $response = ['status' => false, 'msg' => '', 'data' => []];
         //check mikrotik enabled
-        if (self::mikrotik_enabled()) {
+        if (self::mikrotik_enabled() && $customer) {
             self::connect();
             if (!self::$connected) {
                 throw new Exception("Router not connected", 1);
@@ -381,7 +385,12 @@ class Mikrotik
             $user->setArgument('comment', 'Via api [pkg - ' . $customer->package->name . ', price- ' . $customer->package['price'] . 'Tk., date- ' . date('d/m/Y'));
             $user->setArgument('disabled', 'no');
 
-            if (self::$client->sendSync($user)->getType() !== RouterOS\Response::TYPE_FINAL) {
+            $requestResponse = self::$client->sendSync($user);
+            Log::error('MIKROTIK_GET_SERVER_NAME', [
+                'customer-id' => $customer->customerID,
+                'response' => $requestResponse
+            ]);
+            if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                 $response['msg'] = 'Sorry! cannot create customer';
             } else {
 //                self::$client->loop();
@@ -406,7 +415,7 @@ class Mikrotik
                 $response['msg'] = 'Could not connect to router';
                 return $response;
             }
-            if ($customer !== '') {
+            if ($customer) {
                 $mktikId = '';
                 if (empty($mktikId)) {
                     $customerAcc = self::getByName($customer['customerID']);
@@ -418,7 +427,13 @@ class Mikrotik
                     $user = new Request('/ppp/secret/set');
                     $user->setArgument('.id', $mktikId);
                     $user->setArgument('disabled', 'no');
-                    if (self::$client->sendSync($user)->getType() === Response::TYPE_FINAL) {
+
+                    $requestResponse = self::$client->sendSync($user);
+                    Log::error('MIKROTIK_ENABLE_CUSTOMER', [
+                        'customer-id' => $customer['customerID'],
+                        'response' => $requestResponse
+                    ]);
+                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                         $response['status'] = true;
                         $response['msg'] = 'Mikrotik! Customer has been enabled.';
                     } else {
@@ -437,7 +452,7 @@ class Mikrotik
         return $response;
     }
 
-    public static function disable($customer = ''): array
+    public static function disable(?array $customer): array
     {
         $response = ['status' => true, 'msg' => 'Cannot disable customer'];
         if (self::mikrotik_enabled()) {
@@ -446,7 +461,7 @@ class Mikrotik
                 $response['msg'] = 'Could not connect to router';
                 return $response;
             }
-            if ($customer != '') :
+            if ($customer) :
                 $user = self::getByName($customer['customerID']);
                 $mktikId = '';
                 if (!empty($user['data'])) {
@@ -462,7 +477,13 @@ class Mikrotik
                     $userAcc->setArgument('.id', $mktikId);
                     $userAcc->setArgument('disabled', 'yes');
                     $userAcc->setArgument('.proplist', '.id,name,profile,service');
-                    if (self::$client->sendSync($userAcc)->getType() === Response::TYPE_FINAL) {
+
+                    $requestResponse = self::$client->sendSync($user);
+                    Log::error('MIKROTIK_DISABLE_CUSTOMER', [
+                        'customer-id' => $customer['customerID'],
+                        'response' => $requestResponse
+                    ]);
+                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                         $activeCon = self::getActive($customer['customerID']);
                         // dd( $activeCon['data']['.id']);
                         if (!empty($activeCon['data'])) {
@@ -517,7 +538,13 @@ class Mikrotik
                     $customer = new Request('/ppp/secret/set');
                     $customer->setArgument('.id', $mktikId);
                     $customer->setArgument('name', $params['name']);
-                    if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
+
+                    $requestResponse = self::$client->sendSync($user);
+                    Log::error('MIKROTIK_CHANGE_CUSTOMER_NAME', [
+                        'customer-id' => $customer['customerID'],
+                        'response' => $requestResponse
+                    ]);
+                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                         $response['status'] = true;
                         $response['msg'] = 'Your CustomerID has been changed';
                     }
@@ -554,7 +581,13 @@ class Mikrotik
                     $customer = new Request('/ppp/secret/set');
                     $customer->setArgument('.id', $mktikId);
                     $customer->setArgument('password', $params['password']);
-                    if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
+
+                    $requestResponse = self::$client->sendSync($user);
+                    Log::error('MIKROTIK_CHANGE_PASSWORD', [
+                        'customer-id' => $customer['customerID'],
+                        'response' => $requestResponse
+                    ]);
+                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                         $response['status'] = true;
                     } else {
                         $response['msg'] = 'Sorry! cannot change password';
@@ -572,9 +605,7 @@ class Mikrotik
         return $response;
     }
 
-    /**
-     * Change Profile means Change the Packege
-     **/
+
     public static function changeProfile($params = array()): array
     {
         $response = ['status' => false, 'msg' => ''];
@@ -588,7 +619,13 @@ class Mikrotik
                 $customer = new Request('/ppp/secret/set');
                 $customer->setArgument('.id', $params['id']);
                 $customer->setArgument('profile', $params['profile']);
-                if (self::$client->sendSync($customer)->getType() === Response::TYPE_FINAL) {
+
+                $requestResponse = self::$client->sendSync($customer);
+                Log::error('MIKROTIK_CHANGE_CUSTOMER_PROFILE', [
+                    'customer-id' => $customer['customerID'],
+                    'response' => $requestResponse
+                ]);
+                if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                     $response['status'] = true;
                     $response['msg'] = 'Customer package has been successfully changed!';
                 } else {
@@ -623,8 +660,12 @@ class Mikrotik
             $customer = new Request('/ppp/secret/getall');
             $customer->setArgument('.proplist', '.id,name,profile,service');
             $customer->setQuery(Query::where('name', $params['name']));
-            $id = self::$client->sendSync($customer)->getProperty('.id');
-            if (!empty($id) || is_array($id)) {
+            $requestResponse = self::$client->sendSync($customer)->getProperty('.id');
+            if (!empty($requestResponse) || is_array($requestResponse)) {
+                Log::error('MIKROTIK_CHECK_CUSTOMER_EXIST', [
+                    'params' => $params,
+                    'response' => $requestResponse
+                ]);
                 self::$customer_exist = true;
                 return true;
             }
@@ -641,7 +682,11 @@ class Mikrotik
                 '/system scheduler add name=REBOOT interval=2s
                 on-event="/system scheduler remove REBOOT;/system reboot"'
             );
-            self::$client->sendSync($request);
+            $requestResponse = self::$client->sendSync($request);
+
+            Log::error('MIKROTIK_REBOOT', [
+                'response' => $requestResponse
+            ]);
         }
     }
 
