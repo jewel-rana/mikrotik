@@ -4,6 +4,7 @@ namespace Rajtika\Mikrotik\Services;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use PEAR2\Console\CommandLine\Exception;
 use PEAR2\Net\RouterOS;
 use PEAR2\Net\RouterOS\Client;
@@ -78,6 +79,9 @@ class Mikrotik
                 self::$client = new Client(self::$host, self::$user, self::$password, self::$port);
                 self::$connected = true;
             } catch (\Exception $exception) {
+                Log::error($exception->getMessage(), [
+                    'keyword' => 'MIKROTIK_CONNECTION_EXCEPTION'
+                ]);
                 self::$connected = false;
             }
         } else {
@@ -153,6 +157,10 @@ class Mikrotik
                 $response['status'] = true;
                 $response['data'] = $util->setMenu('/log')->getAll();
             } catch (Exception $e) {
+                Log::error($exception->getMessage(), [
+                    'keyword' => 'MIKROTIK_LOG_EXCEPTION'
+                ]);
+
                 $response['msg'] = 'An error occured to collect system user logs';
             }
         } else {
@@ -234,6 +242,11 @@ class Mikrotik
                 $customer = new Request('/ppp/secret/getall detail=""');
                 $customer->setQuery(Query::where('.id', $id));
                 $info = self::$client->sendSync($customer);
+
+                Log::error('MIKROTIK_GET_USER_INFO', [
+                    'user-id' => $id,
+                    'response' => $info
+                ]);
                 if (!empty($info[0])) :
                     $response['status'] = true;
                     $response['data'] = $info[0];
@@ -262,6 +275,10 @@ class Mikrotik
                 $customer = new Request('/ppp/active/print');
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
+                Log::error('MIKROTIK_GET_ACTIVE_USER_INFO', [
+                    'user-name' => $name,
+                    'response' => $info
+                ]);
                 if (!empty($info[0])) :
                     $response['status'] = true;
                     $response['data'] = $info[0];
@@ -292,6 +309,10 @@ class Mikrotik
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
                 if (!empty($info[0])) :
+                    Log::error('MIKROTIK_GET_BY_NAME_USER_INFO', [
+                        'user-name' => $name,
+                        'response' => $info
+                    ]);
                     $response['status'] = true;
                     $response['data'] = $info[0];
                 endif;
