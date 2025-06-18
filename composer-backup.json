@@ -1,0 +1,35 @@
+{
+    "name": "rajtika/mikrotik",
+    "description": "Mikrotik router management through pear2 library",
+    "keywords": ["routeros", "package", "api", "mikrotik", "pear2", "router"],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jewel Rana",
+            "email": "jewelrana.dev@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "php" : ">=5.6",
+        "pear2/net_routeros": "*>=1.0.0b6",
+        "pear2/cache_shm": "*@alpha",
+        "pear2/console_commandline": "*@alpha",
+        "pear2/console_color": "dev-master",
+        "pear2/net_transmitter": ">=1.0.0b1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rajtika\\Mikrotik\\": "src"
+        },
+        "files": [
+            "src/MikrotikServiceProvider.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Rajtika\\Mikrotik\\Test\\": "tests"
+        }
+    }
+}
