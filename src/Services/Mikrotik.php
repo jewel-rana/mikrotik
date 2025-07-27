@@ -591,11 +591,11 @@ class Mikrotik
                 }
 
                 if (!empty($mktikId)) {
-                    $customer = new Request('/ppp/secret/set');
-                    $customer->setArgument('.id', $mktikId);
-                    $customer->setArgument('name', $params['name']);
+                    $request = new Request('/ppp/secret/set');
+                    $request->setArgument('.id', $mktikId);
+                    $request->setArgument('name', $params['name']);
 
-                    $requestResponse = self::$client->sendSync($user);
+                    $requestResponse = self::$client->sendSync($request);
                     Log::error('MIKROTIK_CHANGE_CUSTOMER_NAME', [
                         'customer-id' => $customer['customerID'],
                         'response' => $requestResponse
