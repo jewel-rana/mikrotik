@@ -496,7 +496,7 @@ class Mikrotik
                     $userAcc->setArgument('disabled', 'yes');
                     $userAcc->setArgument('.proplist', '.id,name,profile,service');
 
-                    $requestResponse = self::$client->sendSync($user);
+                    $requestResponse = self::$client->sendSync($userAcc);
                     Log::error('MIKROTIK_DISABLE_CUSTOMER', [
                         'customer-id' => $customer['customerID'],
                         'response' => $requestResponse
