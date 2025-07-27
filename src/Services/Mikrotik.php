@@ -472,66 +472,70 @@ class Mikrotik
 
     public static function disable(?array $customer): array
     {
-        $response = ['status' => true, 'msg' => 'Cannot disable customer'];
-        if (self::mikrotik_enabled()) {
-            self::connect();
-            if (!self::$connected) {
-                $response['msg'] = 'Could not connect to router';
-                return $response;
-            }
-            if ($customer) :
-                $user = self::getByName($customer['customerID']);
-                $mktikId = '';
-                if (!empty($user['data'])) {
-                    foreach ($user['data'] as $key => $v) {
-                        if ($key == ".id") {
-                            $mktikId = $v;
-                        }
-                    }
-                }
-
-                if (!empty($mktikId)) {
-                    $userAcc = new Request('/ppp/secret/set');
-                    $userAcc->setArgument('.id', $mktikId);
-                    $userAcc->setArgument('disabled', 'yes');
-                    $userAcc->setArgument('.proplist', '.id,name,profile,service');
-
-                    $requestResponse = self::$client->sendSync($userAcc);
-                    Log::error('MIKROTIK_DISABLE_CUSTOMER', [
-                        'customer-id' => $customer['customerID'],
-                        'response' => $requestResponse
-                    ]);
-                    if ($requestResponse->getType() == RouterOS\Response::TYPE_FINAL) {
-                        $activeCon = self::getActive($customer['customerID']);
-                        // dd( $activeCon['data']['.id']);
-                        if (!empty($activeCon['data'])) {
-                            foreach ($activeCon['data'] as $key => $v) {
-                                if ($key == ".id") {
-                                    $mktikId = $v;
-                                    $userAcc = new Request('/ppp/active/remove');
-                                    $userAcc->setArgument('.id', $mktikId);
-                                    self::$client->sendSync($userAcc);
-                                }
-                            }
-                        }
-
-                        $response['status'] = true;
-                        $response['msg'] = 'Customer successfully disabled';
-
-                    } else {
-                        $response['msg'] = 'Sorry! cannot disable customer';
-                    }
-                } else {
-                    $response['msg'] = 'Customer not found in router.';
-                }
-            else :
-                $response['msg'] = 'Mikrotik ID not found.';
-            endif;
-        } else {
-            $response['status'] = true;
-            $response['msg'] = 'Mikrotik configuration not set';
+        $response = ['status' => false, 'msg' => 'Cannot disable customer'];
+    
+        if (!self::mikrotik_enabled()) {
+            return ['status' => true, 'msg' => 'Mikrotik configuration not set'];
         }
-
+    
+        self::connect();
+    
+        if (!self::$connected) {
+            return ['status' => false, 'msg' => 'Could not connect to router'];
+        }
+    
+        if (!$customer) {
+            return ['status' => false, 'msg' => 'Customer data missing'];
+        }
+    
+        $user = self::getByName($customer['customerID']);
+        $mktikId = '';
+    
+        if (!empty($user['data'])) {
+            $mktikId = $user['data']->getProperty('.id');
+        }
+    
+        if (empty($mktikId)) {
+            return ['status' => false, 'msg' => 'Customer not found in router.'];
+        }
+    
+        // Disable PPP user
+        $userAcc = new Request('/ppp/secret/set');
+        $userAcc->setArgument('.id', $mktikId);
+        $userAcc->setArgument('disabled', 'yes');
+    
+        $requestResponse = self::$client->sendSync($userAcc);
+    
+        Log::error('MIKROTIK_DISABLE_CUSTOMER', [
+            'customer-id' => $customer['customerID'],
+            'response' => $requestResponse
+        ]);
+    
+        if ($requestResponse->getType() === RouterOS\Response::TYPE_FINAL) {
+            // Remove from active sessions if any
+            $activeCon = self::getActive($customer['customerID']);
+    
+            if (!empty($activeCon['data'])) {
+                $activeId = $activeCon['data']->getProperty('.id');
+    
+                if (!empty($activeId)) {
+                    $remove = new Request('/ppp/active/remove');
+                    $remove->setArgument('.id', $activeId);
+                    self::$client->sendSync($remove);
+                }
+            }
+    
+            $response['status'] = true;
+            $response['msg'] = 'Customer successfully disabled';
+        } else {
+            $response['msg'] = 'Sorry! Cannot disable customer.';
+            foreach ($requestResponse as $r) {
+                if ($r->getType() === '!trap') {
+                    $response['msg'] .= ' Error: ' . $r->getProperty('message');
+                }
+            }
+        }
+    
         return $response;
     }
 
