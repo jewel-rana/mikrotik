@@ -283,10 +283,10 @@ class Mikrotik
                     'user-name' => $name,
                     'response' => $info
                 ]);
-                if (!empty($info[0])) :
+                if ($info instanceof ResponseCollection && $info->getType() === Response::TYPE_DATA) {
                     $response['status'] = true;
                     $response['data'] = $info[0];
-                endif;
+                }
             } else {
                 $response['msg'] = 'Mikrotik name not provided!';
             }
@@ -496,65 +496,81 @@ class Mikrotik
         }
     
         try {
-            // Disable PPP user
-            $userAcc = new Request('/ppp/secret/set');
-            $userAcc->setArgument('.id', $mktikId);
-            $userAcc->setArgument('disabled', 'yes');
+            // Disable the PPP secret
+            $disableReq = new Request('/ppp/secret/set');
+            $disableReq->setArgument('.id', $mktikId);
+            $disableReq->setArgument('disabled', 'yes');
     
-            $requestResponse = self::$client->sendSync($userAcc);
+            $disableRes = self::$client->sendSync($disableReq);
     
             Log::info('MIKROTIK_DISABLE_SECRET', [
                 'customer-id' => $customer['customerID'],
-                'response' => $requestResponse,
-                'response-type' => get_class($requestResponse)
+                'response' => $disableRes,
             ]);
     
-            if (!($requestResponse instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
-                throw new \Exception('Unrecognized response type from /ppp/secret/set');
+            if (!($disableRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
+                throw new \Exception('Unrecognized response from /ppp/secret/set');
             }
     
-            if ($requestResponse->getType() === \PEAR2\Net\RouterOS\Response::TYPE_FINAL) {
-                // Remove from active PPP session
+            if ($disableRes->getType() === \PEAR2\Net\RouterOS\Response::TYPE_FINAL) {
+                // Attempt to remove from active sessions (if connected)
                 $activeCon = self::getActive($customer['customerID']);
                 $activeId = !empty($activeCon['data']) ? $activeCon['data']->getProperty('.id') : null;
     
-                if (!empty($activeId)) {
-                    $remove = new Request('/ppp/active/remove');
-                    $remove->setArgument('.id', $activeId);
+                if (!empty($activeId) && str_starts_with($activeId, '*')) {
+                    try {
+                        $remove = new Request('/ppp/active/remove');
+                        $remove->setArgument('.id', $activeId);
     
-                    $activeResponse = self::$client->sendSync($remove);
+                        $activeRes = self::$client->sendSync($remove);
     
-                    Log::info('MIKROTIK_REMOVE_ACTIVE', [
-                        'customer-id' => $customer['customerID'],
-                        'response' => $activeResponse
-                    ]);
+                        Log::info('MIKROTIK_REMOVE_ACTIVE', [
+                            'customer-id' => $customer['customerID'],
+                            'response' => $activeRes,
+                        ]);
     
-                    if (!($activeResponse instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
-                        throw new \Exception('Unrecognized response from /ppp/active/remove');
+                        if (!($activeRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
+                            Log::warning('Unrecognized response from /ppp/active/remove', [
+                                'customer-id' => $customer['customerID'],
+                                'class' => is_object($activeRes) ? get_class($activeRes) : gettype($activeRes),
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('Exception during /ppp/active/remove', [
+                            'customer-id' => $customer['customerID'],
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
                     }
+                } else {
+                    Log::info('Customer is not actively connected; skipping /ppp/active/remove', [
+                        'customer-id' => $customer['customerID'],
+                        'active-id' => $activeId,
+                    ]);
                 }
     
                 $response['status'] = true;
                 $response['msg'] = 'Customer successfully disabled';
             } else {
-                $response['msg'] = 'Sorry! Cannot disable customer.';
-                foreach ($requestResponse as $r) {
+                $response['msg'] = 'Mikrotik responded with an unexpected type.';
+                foreach ($disableRes as $r) {
                     if ($r->getType() === '!trap') {
-                        $response['msg'] .= ' Error: ' . $r->getProperty('message');
+                        $response['msg'] .= ' Error: ' . ($r->getProperty('message') ?? 'Unknown');
                     }
                 }
             }
-        } catch (\Exception $e) {
-            Log::error('MIKROTIK_DISABLE_EXCEPTION', [
+        } catch (\Throwable $e) {
+            Log::error('Exception during disable()', [
                 'customer-id' => $customer['customerID'],
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
             $response['msg'] = 'Exception: ' . $e->getMessage();
         }
     
         return $response;
     }
+
 
 
     public static function changeName($params = array()): array
