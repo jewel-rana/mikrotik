@@ -2,7 +2,6 @@
 
 namespace Rajtika\Mikrotik\Services;
 
-use Exception;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
