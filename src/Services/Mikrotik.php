@@ -77,6 +77,9 @@ class Mikrotik
         if (!empty(self::$host) && !empty(self::$user) && !empty(self::$password)) {
             try {
                 self::$client = new Client(self::$host, self::$user, self::$password, self::$port);
+                Log::debug('MIKROTIK_CLIENT', [
+                    'client' => self::$client
+                ]);
                 self::$connected = true;
             } catch (\Exception $exception) {
                 Log::error($exception->getMessage(), [
@@ -375,7 +378,7 @@ class Mikrotik
             $user->setArgument('name', $customer->customerID);
             $user->setArgument('profile', $customer->package['code']);
             $user->setArgument('password', $customer->password);
-            $user->setArgument('service', self::$service);
+            // $user->setArgument('service', self::$service);
             // if ($customer->remote_ip) {
             //     $user->setArgument('remote_address', $customer->remote_ip);
             // }
@@ -388,7 +391,9 @@ class Mikrotik
             $requestResponse = self::$client->sendSync($user);
             Log::error('MIKROTIK_GET_SERVER_NAME', [
                 'customer-id' => $customer->customerID,
-                'response' => $requestResponse
+                'response' => $requestResponse,
+                'response-type' => $requestResponse->getType(),
+                'final-type' => RouterOS\Response::TYPE_FINAL
             ]);
             if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                 $response['msg'] = 'Sorry! cannot create customer';
@@ -654,6 +659,7 @@ class Mikrotik
     {
         self::connect();
         if (!self::$connected) {
+            Log::info("MIKROTIK_NOT_CONNECTED");
             return false;
         }
         if ($params['name']) {
@@ -661,11 +667,11 @@ class Mikrotik
             $customer->setArgument('.proplist', '.id,name,profile,service');
             $customer->setQuery(Query::where('name', $params['name']));
             $requestResponse = self::$client->sendSync($customer)->getProperty('.id');
-            if (!empty($requestResponse) || is_array($requestResponse)) {
-                Log::error('MIKROTIK_CHECK_CUSTOMER_EXIST', [
+                Log::error('MIKROTIK_CHECK_CUSTOMER_EXIST_RESPONSE', [
                     'params' => $params,
                     'response' => $requestResponse
                 ]);
+            if (!empty($requestResponse) || is_array($requestResponse)) {
                 self::$customer_exist = true;
                 return true;
             }
