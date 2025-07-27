@@ -378,7 +378,7 @@ class Mikrotik
             $user->setArgument('name', $customer->customerID);
             $user->setArgument('profile', $customer->package['code']);
             $user->setArgument('password', $customer->password);
-            // $user->setArgument('service', self::$service);
+            $user->setArgument('service', self::$service);
             // if ($customer->remote_ip) {
             //     $user->setArgument('remote_address', $customer->remote_ip);
             // }
@@ -390,6 +390,7 @@ class Mikrotik
 
             $requestResponse = self::$client->sendSync($user);
             Log::error('MIKROTIK_GET_SERVER_NAME', [
+                'service' => self::$service,
                 'customer-id' => $customer->customerID,
                 'response' => $requestResponse,
                 'response-type' => $requestResponse->getType(),
