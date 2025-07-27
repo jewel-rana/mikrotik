@@ -669,7 +669,8 @@ class Mikrotik
             $requestResponse = self::$client->sendSync($customer)->getProperty('.id');
                 Log::error('MIKROTIK_CHECK_CUSTOMER_EXIST_RESPONSE', [
                     'params' => $params,
-                    'response' => $requestResponse
+                    'response' => $requestResponse,
+                    'router' => self::$host
                 ]);
             if (!empty($requestResponse) || is_array($requestResponse)) {
                 self::$customer_exist = true;
