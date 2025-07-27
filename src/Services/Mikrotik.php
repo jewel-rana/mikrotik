@@ -371,9 +371,9 @@ class Mikrotik
         $response = ['status' => false, 'msg' => '', 'data' => []];
         //check mikrotik enabled
         if (self::mikrotik_enabled() && $customer) {
-                try {
-                        $profile = trim($customer->package['code']);
-                        $profile = mb_convert_encoding($profile, 'UTF-8');
+            try {
+                $profile = trim($customer->package['code']);
+                $profile = mb_convert_encoding($profile, 'UTF-8');
 
                 self::connect();
                 if (!self::$connected) {
@@ -395,7 +395,7 @@ class Mikrotik
 
                 $requestResponse = self::$client->sendSync($user, true);
                 Log::error('MIKROTIK_GET_SERVER_NAME', [
-                        'package' => $customer->package['code'],
+                    'package' => $customer->package['code'],
                     'service' => self::$service,
                     'customer-id' => $customer->customerID,
                     'response' => $requestResponse,
@@ -415,7 +415,7 @@ class Mikrotik
                     $response['msg'] = 'Customer has been successfully created';
                 }
             } catch (TrapException $e) {
-                    $response['msg'] = $e->getMessage();
+                $response['msg'] = $e->getMessage();
             }
         } else {
             $response['status'] = true;
@@ -473,62 +473,62 @@ class Mikrotik
     public static function disable(?array $customer): array
     {
         $response = ['status' => false, 'msg' => 'Cannot disable customer'];
-    
+
         if (!self::mikrotik_enabled()) {
             return ['status' => true, 'msg' => 'Mikrotik configuration not set'];
         }
-    
+
         self::connect();
-    
+
         if (!self::$connected) {
             return ['status' => false, 'msg' => 'Could not connect to router'];
         }
-    
+
         if (!$customer || empty($customer['customerID'])) {
             return ['status' => false, 'msg' => 'Customer data missing'];
         }
-    
+
         $user = self::getByName($customer['customerID']);
         $mktikId = !empty($user['data']) ? $user['data']->getProperty('.id') : null;
-    
+
         if (empty($mktikId)) {
             return ['status' => false, 'msg' => 'Customer not found in router.'];
         }
-    
+
         try {
             // Disable the PPP secret
             $disableReq = new Request('/ppp/secret/set');
             $disableReq->setArgument('.id', $mktikId);
             $disableReq->setArgument('disabled', 'yes');
-    
+
             $disableRes = self::$client->sendSync($disableReq);
-    
+
             Log::info('MIKROTIK_DISABLE_SECRET', [
                 'customer-id' => $customer['customerID'],
                 'response' => $disableRes,
             ]);
-    
+
             if (!($disableRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
                 throw new \Exception('Unrecognized response from /ppp/secret/set');
             }
-    
+
             if ($disableRes->getType() === \PEAR2\Net\RouterOS\Response::TYPE_FINAL) {
                 // Attempt to remove from active sessions (if connected)
                 $activeCon = self::getActive($customer['customerID']);
                 $activeId = !empty($activeCon['data']) ? $activeCon['data']->getProperty('.id') : null;
-    
+
                 if (!empty($activeId) && str_starts_with($activeId, '*')) {
                     try {
                         $remove = new Request('/ppp/active/remove');
                         $remove->setArgument('.id', $activeId);
-    
+
                         $activeRes = self::$client->sendSync($remove);
-    
+
                         Log::info('MIKROTIK_REMOVE_ACTIVE', [
                             'customer-id' => $customer['customerID'],
                             'response' => $activeRes,
                         ]);
-    
+
                         if (!($activeRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
                             Log::warning('Unrecognized response from /ppp/active/remove', [
                                 'customer-id' => $customer['customerID'],
@@ -548,7 +548,7 @@ class Mikrotik
                         'active-id' => $activeId,
                     ]);
                 }
-    
+
                 $response['status'] = true;
                 $response['msg'] = 'Customer successfully disabled';
             } else {
@@ -567,10 +567,9 @@ class Mikrotik
             ]);
             $response['msg'] = 'Exception: ' . $e->getMessage();
         }
-    
+
         return $response;
     }
-
 
 
     public static function changeName($params = array()): array
@@ -718,11 +717,11 @@ class Mikrotik
             $customer->setArgument('.proplist', '.id,name,profile,service');
             $customer->setQuery(Query::where('name', $params['name']));
             $requestResponse = self::$client->sendSync($customer)->getProperty('.id');
-                Log::error('MIKROTIK_CHECK_CUSTOMER_EXIST_RESPONSE', [
-                    'params' => $params,
-                    'response' => $requestResponse,
-                    'router' => self::$host
-                ]);
+            Log::error('MIKROTIK_CHECK_CUSTOMER_EXIST_RESPONSE', [
+                'params' => $params,
+                'response' => $requestResponse,
+                'router' => self::$host
+            ]);
             if (!empty($requestResponse) || is_array($requestResponse)) {
                 self::$customer_exist = true;
                 return true;
@@ -730,6 +729,397 @@ class Mikrotik
         }
         return false;
     }
+
+    public static function ping(string $address, int $count = 4): array
+    {
+        $response = ['status' => false, 'msg' => '', 'data' => []];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/ping');
+            $request->setArgument('address', $address);
+            $request->setArgument('count', $count);
+
+            $pingResponse = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $response['status'] = true;
+            $response['data'] = $pingResponse;
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Ping failed: ' . $e->getMessage();
+            Log::error('MIKROTIK_PING_ERROR', [
+                'address' => $address,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function getHotspotUsers(): array
+    {
+        $response = ['status' => false, 'msg' => '', 'data' => []];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/ip/hotspot/user/print');
+            $hotspotUsers = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $response['status'] = true;
+            $response['data'] = $hotspotUsers;
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Error fetching hotspot users: ' . $e->getMessage();
+            Log::error('MIKROTIK_HOTSPOT_USERS_ERROR', [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function addHotspotUser(string $name, string $password, string $profile = 'default'): array
+    {
+        $response = ['status' => false, 'msg' => ''];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/ip/hotspot/user/add');
+            $request->setArgument('name', $name);
+            $request->setArgument('password', $password);
+            $request->setArgument('profile', $profile);
+
+            $result = self::$client->sendSync($request);
+
+            $response['status'] = true;
+            $response['msg'] = 'Hotspot user added successfully';
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Error adding hotspot user: ' . $e->getMessage();
+            Log::error('MIKROTIK_ADD_HOTSPOT_USER_ERROR', [
+                'name' => $name,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function removeHotspotUser(string $name): array
+    {
+        $response = ['status' => false, 'msg' => ''];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/ip/hotspot/user/print');
+            $request->setQuery(Query::where('name', $name));
+            $result = self::$client->sendSync($request);
+
+            if (!empty($result[0])) {
+                $id = $result[0]->getProperty('.id');
+
+                $remove = new Request('/ip/hotspot/user/remove');
+                $remove->setArgument('.id', $id);
+                self::$client->sendSync($remove);
+
+                $response['status'] = true;
+                $response['msg'] = 'Hotspot user removed';
+            } else {
+                $response['msg'] = 'Hotspot user not found';
+            }
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Error removing hotspot user: ' . $e->getMessage();
+            Log::error('MIKROTIK_REMOVE_HOTSPOT_USER_ERROR', [
+                'name' => $name,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function traceroute(string $address): array
+    {
+        $response = ['status' => false, 'msg' => '', 'data' => []];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/tool/traceroute');
+            $request->setArgument('address', $address);
+
+            $data = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $response['status'] = true;
+            $response['data'] = $data;
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Traceroute failed: ' . $e->getMessage();
+            Log::error('MIKROTIK_TRACEROUTE_ERROR', [
+                'address' => $address,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function monitorInterface(string $interface): array
+    {
+        $response = ['status' => false, 'msg' => '', 'data' => []];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/interface/monitor-traffic');
+            $request->setArgument('interface', $interface);
+            $request->setArgument('once', ''); // prevents continuous streaming
+
+            $data = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $response['status'] = true;
+            $response['data'] = $data;
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Traffic monitor failed: ' . $e->getMessage();
+            Log::error('MIKROTIK_MONITOR_INTERFACE_ERROR', [
+                'interface' => $interface,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function getDhcpLeases(): array
+    {
+        $response = ['status' => false, 'msg' => '', 'data' => []];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/ip/dhcp-server/lease/print');
+            $leases = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $response['status'] = true;
+            $response['data'] = $leases;
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Failed to fetch DHCP leases: ' . $e->getMessage();
+            Log::error('MIKROTIK_DHCP_LEASE_ERROR', [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function getRouterIdentity(): array
+    {
+        $response = ['status' => false, 'msg' => '', 'identity' => ''];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/system/identity/print');
+            $data = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $response['status'] = true;
+            $response['identity'] = $data[0]->getProperty('name') ?? '';
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Failed to fetch identity: ' . $e->getMessage();
+            Log::error('MIKROTIK_IDENTITY_ERROR', [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function getIpAddresses(): array
+    {
+        $response = ['status' => false, 'msg' => '', 'data' => []];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            $request = new Request('/ip/address/print');
+            $addresses = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $response['status'] = true;
+            $response['data'] = $addresses;
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Failed to fetch IP addresses: ' . $e->getMessage();
+            Log::error('MIKROTIK_IP_ADDRESS_ERROR', [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $response;
+    }
+
+    public static function diagnose(string $address): array
+    {
+        $response = [
+            'status' => false,
+            'msg' => '',
+            'data' => [
+                'ping' => [],
+                'traceroute' => [],
+            ],
+        ];
+
+        if (!self::mikrotik_enabled()) {
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
+        }
+
+        self::connect();
+
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+
+        try {
+            // Run ping
+            $pingReq = new Request('/ping');
+            $pingReq->setArgument('address', $address);
+            $pingReq->setArgument('count', 4);
+            $pingResult = self::$client->sendSync($pingReq)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            // Run traceroute
+            $traceReq = new Request('/tool/traceroute');
+            $traceReq->setArgument('address', $address);
+            $traceResult = self::$client->sendSync($traceReq)->getAllOfType(RouterOS\Response::TYPE_DATA);
+
+            $pingData = array_map(function ($item) {
+                $time = floatval(str_replace('ms', '', $item->getProperty('time')));
+                return [
+                    'host' => $item->getProperty('host') ?? '',
+                    'resolved' => gethostbyaddr($item->getProperty('host')) ?? '',
+                    'time' => $item->getProperty('time') ?? '',
+                    'time_level' => $time < 50 ? 'good' : ($time < 100 ? 'warning' : 'high'),
+                    'ttl' => $item->getProperty('ttl') ?? '',
+                    'bytes' => $item->getProperty('bytes') ?? '',
+                ];
+            }, $pingResult);
+
+            $traceData = array_map(function ($item) {
+                $time = floatval(str_replace('ms', '', $item->getProperty('time')));
+                $host = $item->getProperty('host') ?? '';
+                return [
+                    'hop' => $item->getProperty('hop') ?? '',
+                    'host' => $host,
+                    'resolved' => $host ? gethostbyaddr($host) : '',
+                    'time' => $item->getProperty('time') ?? '',
+                    'time_level' => $time < 50 ? 'good' : ($time < 100 ? 'warning' : 'high'),
+                ];
+            }, $traceResult);
+
+            $response['status'] = true;
+            $response['msg'] = 'Diagnostics complete';
+            $response['data']['ping'] = $pingData;
+            $response['data']['traceroute'] = $traceData;
+        } catch (\Throwable $e) {
+            $response['msg'] = 'Diagnostic failed: ' . $e->getMessage();
+            Log::error('MIKROTIK_DIAGNOSE_ERROR', [
+                'address' => $address,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $response;
+    }
+
 
     public static function reboot()
     {
