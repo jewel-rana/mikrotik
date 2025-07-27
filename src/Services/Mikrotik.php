@@ -398,10 +398,7 @@ class Mikrotik
                     'response-type' => $requestResponse->getType(),
                     'final-type' => RouterOS\Response::TYPE_FINAL
                 ]);
-                foreach ($requestResponse as $r) {
-                    echo $r->getType() . ' - ' . $r->getAttribute('message') . PHP_EOL;
-                    $response['message'] = $r->getAttribute('message');
-                }
+
                 if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                     $response['msg'] = 'Sorry! cannot create customer';
                 } else {
