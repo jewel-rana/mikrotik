@@ -371,14 +371,17 @@ class Mikrotik
         $response = ['status' => false, 'msg' => '', 'data' => []];
         //check mikrotik enabled
         if (self::mikrotik_enabled() && $customer) {
-            try {
+                try {
+                        $profile = trim($customer->package['code']);
+                        $profile = mb_convert_encoding($profile, 'UTF-8');
+
                 self::connect();
                 if (!self::$connected) {
                     throw new Exception("Router not connected", 1);
                 }
                 $user = new Request('/ppp/secret/add');
                 $user->setArgument('name', $customer->customerID);
-                $user->setArgument('profile', $customer->package['code']);
+                $user->setArgument('profile', $package);
                 $user->setArgument('password', $customer->password);
                 $user->setArgument('service', self::$service);
                 // if ($customer->remote_ip) {
@@ -389,9 +392,10 @@ class Mikrotik
                 // }
                 $user->setArgument('comment', 'Via api [pkg - ' . $customer->package->name . ', price- ' . $customer->package['price'] . 'Tk., date- ' . date('d/m/Y'));
                 $user->setArgument('disabled', 'no');
-    
-                $requestResponse = self::$client->sendSync($user);
+
+                $requestResponse = self::$client->sendSync($user, true);
                 Log::error('MIKROTIK_GET_SERVER_NAME', [
+                        'package' => $customer->package['code'],
                     'service' => self::$service,
                     'customer-id' => $customer->customerID,
                     'response' => $requestResponse,
@@ -399,22 +403,19 @@ class Mikrotik
                     'final-type' => RouterOS\Response::TYPE_FINAL
                 ]);
 
+                $response['data'] = $requestResponse;
+
                 if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
                     $response['msg'] = 'Sorry! cannot create customer';
                 } else {
-    //                self::$client->loop();
+                    self::$client->loop();
                     $customerAcc = self::getByName($customer->customerID);
                     $response['data'] = $customerAcc['status'] ? $customerAcc['data'] : null;
                     $response['status'] = true;
                     $response['msg'] = 'Customer has been successfully created';
                 }
             } catch (TrapException $e) {
-                $trap = $e->getResponse();
-                foreach ($trap as $message) {
-                    echo $message->getType() . ': ' . $message->getArgument() . PHP_EOL;
-                    // or for specific trap details:
-                    echo $message->getProperty('message') . PHP_EOL;
-                }
+                    $response['msg'] = $e->getMessage();
             }
         } else {
             $response['status'] = true;
@@ -450,7 +451,7 @@ class Mikrotik
                         'customer-id' => $customer['customerID'],
                         'response' => $requestResponse
                     ]);
-                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
+                    if ($requestResponse->getType() == RouterOS\Response::TYPE_FINAL) {
                         $response['status'] = true;
                         $response['msg'] = 'Mikrotik! Customer has been enabled.';
                     } else {
@@ -500,7 +501,7 @@ class Mikrotik
                         'customer-id' => $customer['customerID'],
                         'response' => $requestResponse
                     ]);
-                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
+                    if ($requestResponse->getType() == RouterOS\Response::TYPE_FINAL) {
                         $activeCon = self::getActive($customer['customerID']);
                         // dd( $activeCon['data']['.id']);
                         if (!empty($activeCon['data'])) {
