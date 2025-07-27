@@ -141,7 +141,7 @@ class Mikrotik
             self::connect();
             if (!self::$connected) {
             }
-            $data = self::$client->sendSync(new Request('/system/resource/print'))->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $data = self::$client->sendSync(new Request('/system/resource/print'))->getAllOfType(Response::TYPE_DATA);
         }
         return $data;
     }
@@ -183,7 +183,7 @@ class Mikrotik
                 $response['status'] = false;
                 return $response;
             }
-            $response['data'] = self::$client->sendSync(new Request('/interface/print'))->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $response['data'] = self::$client->sendSync(new Request('/interface/print'))->getAllOfType(Response::TYPE_DATA);
             $response['status'] = true;
         } else {
             $response['msg'] = 'Mikrotik configuration is not set.';
@@ -204,7 +204,7 @@ class Mikrotik
                 $response['status'] = false;
                 return $response;
             }
-            $response['data'] = self::$client->sendSync(new Request('/ppp/' . $type . '/print detail=""'))->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $response['data'] = self::$client->sendSync(new Request('/ppp/' . $type . '/print detail=""'))->getAllOfType(Response::TYPE_DATA);
             $response['status'] = true;
         } else {
             $response['msg'] = 'Mikrotik configuration is not set.';
@@ -225,7 +225,7 @@ class Mikrotik
                 $response['status'] = false;
                 return $response;
             }
-            $response['data'] = self::$client->sendSync(new Request('/interface/monitor-traffic'))->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $response['data'] = self::$client->sendSync(new Request('/interface/monitor-traffic'))->getAllOfType(Response::TYPE_DATA);
             $response['status'] = true;
         } else {
             $response['msg'] = 'Mikrotik configuration is not set.';
@@ -400,12 +400,12 @@ class Mikrotik
                     'customer-id' => $customer->customerID,
                     'response' => $requestResponse,
                     'response-type' => $requestResponse->getType(),
-                    'final-type' => RouterOS\Response::TYPE_FINAL
+                    'final-type' => Response::TYPE_FINAL
                 ]);
 
                 $response['data'] = $requestResponse;
 
-                if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
+                if ($requestResponse->getType() !== Response::TYPE_FINAL) {
                     $response['msg'] = 'Sorry! cannot create customer';
                 } else {
                     self::$client->loop();
@@ -451,7 +451,7 @@ class Mikrotik
                         'customer-id' => $customer['customerID'],
                         'response' => $requestResponse
                     ]);
-                    if ($requestResponse->getType() == RouterOS\Response::TYPE_FINAL) {
+                    if ($requestResponse->getType() == Response::TYPE_FINAL) {
                         $response['status'] = true;
                         $response['msg'] = 'Mikrotik! Customer has been enabled.';
                     } else {
@@ -509,53 +509,54 @@ class Mikrotik
             ]);
 
             if (!($disableRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
-                throw new \Exception('Unrecognized response from /ppp/secret/set');
-            }
+                $response['msg'] = 'Unrecognized response from router: ' . $customer['router_id'];
+            } else {
 
-            if ($disableRes->getType() === \PEAR2\Net\RouterOS\Response::TYPE_FINAL) {
-                // Attempt to remove from active sessions (if connected)
-                $activeCon = self::getActive($customer['customerID']);
-                $activeId = !empty($activeCon['data']) ? $activeCon['data']->getProperty('.id') : null;
+                if ($disableRes->getType() === Response::TYPE_FINAL) {
+                    // Attempt to remove from active sessions (if connected)
+                    $activeCon = self::getActive($customer['customerID']);
+                    $activeId = !empty($activeCon['data']) ? $activeCon['data']->getProperty('.id') : null;
 
-                if (!empty($activeId) && str_starts_with($activeId, '*')) {
-                    try {
-                        $remove = new Request('/ppp/active/remove');
-                        $remove->setArgument('.id', $activeId);
+                    if (!empty($activeId) && str_starts_with($activeId, '*')) {
+                        try {
+                            $remove = new Request('/ppp/active/remove');
+                            $remove->setArgument('.id', $activeId);
 
-                        $activeRes = self::$client->sendSync($remove);
+                            $activeRes = self::$client->sendSync($remove);
 
-                        Log::info('MIKROTIK_REMOVE_ACTIVE', [
-                            'customer-id' => $customer['customerID'],
-                            'response' => $activeRes,
-                        ]);
-
-                        if (!($activeRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
-                            Log::warning('Unrecognized response from /ppp/active/remove', [
+                            Log::info('MIKROTIK_REMOVE_ACTIVE', [
                                 'customer-id' => $customer['customerID'],
-                                'class' => is_object($activeRes) ? get_class($activeRes) : gettype($activeRes),
+                                'response' => $activeRes,
+                            ]);
+
+                            if (!($activeRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
+                                Log::warning('Unrecognized response from /ppp/active/remove', [
+                                    'customer-id' => $customer['customerID'],
+                                    'class' => is_object($activeRes) ? get_class($activeRes) : gettype($activeRes),
+                                ]);
+                            }
+                        } catch (\Throwable $e) {
+                            Log::error('Exception during /ppp/active/remove', [
+                                'customer-id' => $customer['customerID'],
+                                'error' => $e->getMessage(),
+                                'trace' => $e->getTraceAsString(),
                             ]);
                         }
-                    } catch (\Throwable $e) {
-                        Log::error('Exception during /ppp/active/remove', [
+                    } else {
+                        Log::info('Customer is not actively connected; skipping /ppp/active/remove', [
                             'customer-id' => $customer['customerID'],
-                            'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
+                            'active-id' => $activeId,
                         ]);
                     }
-                } else {
-                    Log::info('Customer is not actively connected; skipping /ppp/active/remove', [
-                        'customer-id' => $customer['customerID'],
-                        'active-id' => $activeId,
-                    ]);
-                }
 
-                $response['status'] = true;
-                $response['msg'] = 'Customer successfully disabled';
-            } else {
-                $response['msg'] = 'Mikrotik responded with an unexpected type.';
-                foreach ($disableRes as $r) {
-                    if ($r->getType() === '!trap') {
-                        $response['msg'] .= ' Error: ' . ($r->getProperty('message') ?? 'Unknown');
+                    $response['status'] = true;
+                    $response['msg'] = 'Customer successfully disabled';
+                } else {
+                    $response['msg'] = 'Mikrotik responded with an unexpected type.';
+                    foreach ($disableRes as $r) {
+                        if ($r->getType() === '!trap') {
+                            $response['msg'] .= ' Error: ' . ($r->getProperty('message') ?? 'Unknown');
+                        }
                     }
                 }
             }
@@ -599,7 +600,7 @@ class Mikrotik
                         'customer-id' => $customer['customerID'],
                         'response' => $requestResponse
                     ]);
-                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
+                    if ($requestResponse->getType() !== Response::TYPE_FINAL) {
                         $response['status'] = true;
                         $response['msg'] = 'Your CustomerID has been changed';
                     }
@@ -642,7 +643,7 @@ class Mikrotik
                         'customer-id' => $customer['customerID'],
                         'response' => $requestResponse
                     ]);
-                    if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
+                    if ($requestResponse->getType() !== Response::TYPE_FINAL) {
                         $response['status'] = true;
                     } else {
                         $response['msg'] = 'Sorry! cannot change password';
@@ -680,7 +681,7 @@ class Mikrotik
                     'customer-id' => $customer['customerID'],
                     'response' => $requestResponse
                 ]);
-                if ($requestResponse->getType() !== RouterOS\Response::TYPE_FINAL) {
+                if ($requestResponse->getType() !== Response::TYPE_FINAL) {
                     $response['status'] = true;
                     $response['msg'] = 'Customer package has been successfully changed!';
                 } else {
@@ -751,7 +752,7 @@ class Mikrotik
             $request->setArgument('address', $address);
             $request->setArgument('count', $count);
 
-            $pingResponse = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $pingResponse = self::$client->sendSync($request)->getAllOfType(Response::TYPE_DATA);
 
             $response['status'] = true;
             $response['data'] = $pingResponse;
@@ -784,7 +785,7 @@ class Mikrotik
 
         try {
             $request = new Request('/ip/hotspot/user/print');
-            $hotspotUsers = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $hotspotUsers = self::$client->sendSync($request)->getAllOfType(Response::TYPE_DATA);
 
             $response['status'] = true;
             $response['data'] = $hotspotUsers;
@@ -899,7 +900,7 @@ class Mikrotik
             $request = new Request('/tool/traceroute');
             $request->setArgument('address', $address);
 
-            $data = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $data = self::$client->sendSync($request)->getAllOfType(Response::TYPE_DATA);
 
             $response['status'] = true;
             $response['data'] = $data;
@@ -935,7 +936,7 @@ class Mikrotik
             $request->setArgument('interface', $interface);
             $request->setArgument('once', ''); // prevents continuous streaming
 
-            $data = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $data = self::$client->sendSync($request)->getAllOfType(Response::TYPE_DATA);
 
             $response['status'] = true;
             $response['data'] = $data;
@@ -968,7 +969,7 @@ class Mikrotik
 
         try {
             $request = new Request('/ip/dhcp-server/lease/print');
-            $leases = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $leases = self::$client->sendSync($request)->getAllOfType(Response::TYPE_DATA);
 
             $response['status'] = true;
             $response['data'] = $leases;
@@ -1000,7 +1001,7 @@ class Mikrotik
 
         try {
             $request = new Request('/system/identity/print');
-            $data = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $data = self::$client->sendSync($request)->getAllOfType(Response::TYPE_DATA);
 
             $response['status'] = true;
             $response['identity'] = $data[0]->getProperty('name') ?? '';
@@ -1032,7 +1033,7 @@ class Mikrotik
 
         try {
             $request = new Request('/ip/address/print');
-            $addresses = self::$client->sendSync($request)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $addresses = self::$client->sendSync($request)->getAllOfType(Response::TYPE_DATA);
 
             $response['status'] = true;
             $response['data'] = $addresses;
@@ -1074,12 +1075,12 @@ class Mikrotik
             $pingReq = new Request('/ping');
             $pingReq->setArgument('address', $address);
             $pingReq->setArgument('count', 4);
-            $pingResult = self::$client->sendSync($pingReq)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $pingResult = self::$client->sendSync($pingReq)->getAllOfType(Response::TYPE_DATA);
 
             // Run traceroute
             $traceReq = new Request('/tool/traceroute');
             $traceReq->setArgument('address', $address);
-            $traceResult = self::$client->sendSync($traceReq)->getAllOfType(RouterOS\Response::TYPE_DATA);
+            $traceResult = self::$client->sendSync($traceReq)->getAllOfType(Response::TYPE_DATA);
 
             $pingData = array_map(function ($item) {
                 $time = floatval(str_replace('ms', '', $item->getProperty('time')));
