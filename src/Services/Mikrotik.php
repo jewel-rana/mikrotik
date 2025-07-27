@@ -663,40 +663,46 @@ class Mikrotik
 
 
     public static function changeProfile($params = array()): array
-    {
-        $response = ['status' => false, 'msg' => ''];
-        if (self::mikrotik_enabled()) {
-            self::connect();
-            if (!self::$connected) {
-                $response['msg'] = 'Could not connect to router';
-                return $response;
-            }
-            if ($params['profile'] != '') {
-                $customer = new Request('/ppp/secret/set');
-                $customer->setArgument('.id', $params['id']);
-                $customer->setArgument('profile', $params['profile']);
+{
+    $response = ['status' => false, 'msg' => ''];
 
-                $requestResponse = self::$client->sendSync($customer);
-                Log::error('MIKROTIK_CHANGE_CUSTOMER_PROFILE', [
-                    'customer-id' => $customer['customerID'],
-                    'response' => $requestResponse
-                ]);
-                if ($requestResponse->getType() !== Response::TYPE_FINAL) {
-                    $response['status'] = true;
-                    $response['msg'] = 'Customer package has been successfully changed!';
-                } else {
-                    $response['msg'] = 'Sorry! cannot change package';
-                }
-            } else {
-                $response['msg'] = 'Customer package not selected.';
-            }
-        } else {
-            $response['status'] = true;
-            $response['msg'] = 'Mikrotik configuration not set.';
-        }
-
+    if (!self::mikrotik_enabled()) {
+        $response['status'] = true;
+        $response['msg'] = 'Mikrotik configuration not set.';
         return $response;
     }
+
+    self::connect();
+    if (!self::$connected) {
+        $response['msg'] = 'Could not connect to router';
+        return $response;
+    }
+
+    if (!empty($params['profile']) && !empty($params['id'])) {
+        $request = new Request('/ppp/secret/set');
+        $request->setArgument('.id', $params['id']);
+        $request->setArgument('profile', $params['profile']);
+
+        $requestResponse = self::$client->sendSync($request);
+
+        Log::error('MIKROTIK_CHANGE_CUSTOMER_PROFILE', [
+            'customer-id' => $params['customerID'] ?? null,
+            'response' => $requestResponse
+        ]);
+
+        if ($requestResponse->getType() === Response::TYPE_FINAL) {
+            $response['status'] = true;
+            $response['msg'] = 'Customer package has been successfully changed!';
+        } else {
+            $response['msg'] = 'Sorry! cannot change package';
+        }
+    } else {
+        $response['msg'] = 'Customer package or ID not provided.';
+    }
+
+    return $response;
+}
+
 
     private static function mikrotik_enabled(): bool
     {
