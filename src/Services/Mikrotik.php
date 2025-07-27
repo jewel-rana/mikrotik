@@ -2,6 +2,7 @@
 
 namespace Rajtika\Mikrotik\Services;
 
+use Exception;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -372,17 +373,17 @@ class Mikrotik
         //check mikrotik enabled
         if (self::mikrotik_enabled() && $customer) {
             try {
-                $profile = trim($customer->package['code']);
+                $profile = trim($customer['package']['code']);
                 $profile = mb_convert_encoding($profile, 'UTF-8');
 
                 self::connect();
                 if (!self::$connected) {
-                    throw new Exception("Router not connected", 1);
+                    throw new \Exception("Router not connected", 1);
                 }
                 $user = new Request('/ppp/secret/add');
-                $user->setArgument('name', $customer->customerID);
-                $user->setArgument('profile', $package);
-                $user->setArgument('password', $customer->password);
+                $user->setArgument('name', $customer['customerID']);
+                $user->setArgument('profile', $profile);
+                $user->setArgument('password', $customer['password']);
                 $user->setArgument('service', self::$service);
                 // if ($customer->remote_ip) {
                 //     $user->setArgument('remote_address', $customer->remote_ip);
@@ -390,14 +391,14 @@ class Mikrotik
                 // if ($customer->remote_mac) {
                 //     $user->setArgument('physical_address', $customer->remote_mac);
                 // }
-                $user->setArgument('comment', 'Via api [pkg - ' . $customer->package->name . ', price- ' . $customer->package['price'] . 'Tk., date- ' . date('d/m/Y'));
+                $user->setArgument('comment', 'Via api [pkg - ' . $customer['package']['name'] . ', price- ' . $customer['package']['price'] . 'Tk., date- ' . date('d/m/Y'));
                 $user->setArgument('disabled', 'no');
 
                 $requestResponse = self::$client->sendSync($user, true);
                 Log::error('MIKROTIK_GET_SERVER_NAME', [
-                    'package' => $customer->package['code'],
+                    'package' => $customer['package']['code'],
                     'service' => self::$service,
-                    'customer-id' => $customer->customerID,
+                    'customer-id' => $customer['customerID'],
                     'response' => $requestResponse,
                     'response-type' => $requestResponse->getType(),
                     'final-type' => Response::TYPE_FINAL
@@ -409,7 +410,7 @@ class Mikrotik
                     $response['msg'] = 'Sorry! cannot create customer';
                 } else {
                     self::$client->loop();
-                    $customerAcc = self::getByName($customer->customerID);
+                    $customerAcc = self::getByName($customer['customerID']);
                     $response['data'] = $customerAcc['status'] ? $customerAcc['data'] : null;
                     $response['status'] = true;
                     $response['msg'] = 'Customer has been successfully created';
