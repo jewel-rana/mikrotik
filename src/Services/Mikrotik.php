@@ -135,16 +135,31 @@ class Mikrotik
     }
 
     public static function resource(): object
-    {
-        $data = null;
-        if (self::mikrotik_enabled()) {
-            self::connect();
-            if (!self::$connected) {
-            }
-            $data = self::$client->sendSync(new Request('/system/resource/print'))->getAllOfType(Response::TYPE_DATA);
+{
+    $data = (object) [];
+
+    if (self::mikrotik_enabled()) {
+        self::connect();
+
+        if (!self::$connected) {
+            Log::error('MIKROTIK_RESOURCE_ERROR', ['msg' => 'Client not connected']);
+            return $data;
         }
-        return $data;
+
+        try {
+            $response = self::$client->sendSync(new Request('/system/resource/print'));
+            $data = $response->getAllOfType(Response::TYPE_DATA);
+        } catch (\Throwable $e) {
+            Log::error('MIKROTIK_RESOURCE_EXCEPTION', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
     }
+
+    return $data;
+}
+
 
     public static function logs(): array
     {
