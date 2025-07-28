@@ -585,7 +585,7 @@ class Mikrotik
             }
             if ($params['name'] != '') {
                 $mktikId = '';
-                $user = self::getByName($params['customerID']);
+                $user = self::getByName($params['name']);
                 if ($user['status']) {
                     $mktikId = $user['data']->getProperty('.id');
                 }
@@ -597,7 +597,7 @@ class Mikrotik
 
                     $requestResponse = self::$client->sendSync($request);
                     Log::error('MIKROTIK_CHANGE_CUSTOMER_NAME', [
-                        'customer-id' => $customer['customerID'],
+                        'customer-id' => $params['name'],
                         'response' => $requestResponse
                     ]);
                     if ($requestResponse->getType() !== Response::TYPE_FINAL) {
