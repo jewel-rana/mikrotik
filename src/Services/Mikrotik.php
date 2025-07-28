@@ -600,7 +600,7 @@ class Mikrotik
             }
             if ($params['name'] != '') {
                 $mktikId = '';
-                $user = self::getByName($params['name']);
+                $user = self::getByName($params['customerID']);
                 if ($user['status']) {
                     $mktikId = $user['data']->getProperty('.id');
                 }
