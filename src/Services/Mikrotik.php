@@ -613,12 +613,16 @@ class Mikrotik
                     $requestResponse = self::$client->sendSync($request);
                     Log::error('MIKROTIK_CHANGE_CUSTOMER_NAME', [
                         'customer-id' => $params['name'],
-                        'response' => $requestResponse
+                        'response' => $requestResponse->getType()
                     ]);
-                    if ($requestResponse->getType() !== Response::TYPE_FINAL) {
+
+                    if ($requestResponse->getType() == Response::TYPE_FINAL) {
                         $response['status'] = true;
                         $response['msg'] = 'Your CustomerID has been changed';
+                    } else {
+                        $response['msg'] = 'Invalid response from mikrotik';
                     }
+
                 } else {
                     $response['msg'] = 'Mikrotik account not found';
                 }
