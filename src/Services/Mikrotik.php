@@ -653,17 +653,19 @@ class Mikrotik
                     $mktikId = $user['data']->getProperty('.id');
                 }
                 if (!empty($mktikId)) {
-                    $customer = new Request('/ppp/secret/set');
-                    $customer->setArgument('.id', $mktikId);
-                    $customer->setArgument('password', $params['password']);
+                    $request = new Request('/ppp/secret/set');
+                    $request->setArgument('.id', $mktikId);
+                    $request->setArgument('password', $params['password']);
 
-                    $requestResponse = self::$client->sendSync($user);
+                    $requestResponse = self::$client->sendSync($request);
                     Log::error('MIKROTIK_CHANGE_PASSWORD', [
-                        'customer-id' => $customer['customerID'],
+                        'customer-id' => $params['customerID'],
+                        'password' => $params['password']
                         'response' => $requestResponse
                     ]);
-                    if ($requestResponse->getType() !== Response::TYPE_FINAL) {
+                    if ($requestResponse->getType() == Response::TYPE_FINAL) {
                         $response['status'] = true;
+                        $response['msg'] = 'Password has been updated successfully';
                     } else {
                         $response['msg'] = 'Sorry! cannot change password';
                     }
