@@ -660,7 +660,7 @@ class Mikrotik
                     $requestResponse = self::$client->sendSync($request);
                     Log::error('MIKROTIK_CHANGE_PASSWORD', [
                         'customer-id' => $params['customerID'],
-                        'password' => $params['password']
+                        'password' => $params['password'],
                         'response' => $requestResponse
                     ]);
                     if ($requestResponse->getType() == Response::TYPE_FINAL) {
