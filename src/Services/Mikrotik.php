@@ -298,9 +298,11 @@ class Mikrotik
                     'user-name' => $name,
                     'response' => $info
                 ]);
-                if ($info instanceof ResponseCollection && $info->getType() === Response::TYPE_DATA) {
+                $mktikId = $info[0]->getProperty('.id');
+                if (!empty($mktikId)) {
                     $response['status'] = true;
                     $response['data'] = $info[0];
+                    $response['id'] = $mktikId;
                 }
             } else {
                 $response['msg'] = 'Mikrotik name not provided!';
