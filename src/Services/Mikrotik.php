@@ -2,6 +2,7 @@
 
 namespace Rajtika\Mikrotik\Services;
 
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -1077,78 +1078,159 @@ class Mikrotik
     }
 
     public static function diagnose(string $address): array
-    {
-        $response = [
-            'status' => false,
-            'msg' => '',
-            'data' => [
-                'ping' => [],
-                'traceroute' => [],
-            ],
-        ];
+{
+    $response = [
+        'status' => false,
+        'msg' => '',
+        'data' => [
+            'ping' => [],
+            'traceroute' => [],
+        ],
+    ];
 
-        if (!self::mikrotik_enabled()) {
-            $response['msg'] = 'Mikrotik configuration not set.';
-            return $response;
-        }
+    if (!self::mikrotik_enabled()) {
+        $response['msg'] = 'Mikrotik configuration not set.';
+        return $response;
+    }
 
-        self::connect();
+    self::connect();
 
-        if (!self::$connected) {
-            $response['msg'] = 'Could not connect to router';
-            return $response;
-        }
+    if (!self::$connected) {
+        $response['msg'] = 'Could not connect to router';
+        return $response;
+    }
 
+    try {
+        // Run ping
+        $pingReq = new Request('/ping');
+        $pingReq->setArgument('address', $address);
+        $pingReq->setArgument('count', 4);
+        $pingReq->setArgument('interval', '200ms');
+        $pingResult = self::$client->sendSync($pingReq)->getAllOfType(Response::TYPE_DATA);
+
+        $pingData = array_map(function ($item) {
+            $time = floatval(str_replace('ms', '', $item->getProperty('time')));
+            $host = $item->getProperty('host');
+            return [
+                'host' => $host,
+                'resolved' => $host ? @gethostbyaddr($host) : '',
+                'time' => $item->getProperty('time'),
+                'time_level' => $time < 50 ? 'good' : ($time < 100 ? 'warning' : 'high'),
+                'ttl' => $item->getProperty('ttl'),
+                'bytes' => $item->getProperty('bytes'),
+            ];
+        }, $pingResult);
+
+        // Run traceroute - BUT set a timeout limit
+        $traceData = [];
         try {
-            // Run ping
-            $pingReq = new Request('/ping');
-            $pingReq->setArgument('address', $address);
-            $pingReq->setArgument('count', 4);
-            $pingResult = self::$client->sendSync($pingReq)->getAllOfType(Response::TYPE_DATA);
-
-            // Run traceroute
             $traceReq = new Request('/tool/traceroute');
             $traceReq->setArgument('address', $address);
+            $traceReq->setArgument('timeout', '200ms'); // safety timeout per hop
+            $traceReq->setArgument('count', '1'); // avoid hanging
             $traceResult = self::$client->sendSync($traceReq)->getAllOfType(Response::TYPE_DATA);
-
-            $pingData = array_map(function ($item) {
-                $time = floatval(str_replace('ms', '', $item->getProperty('time')));
-                return [
-                    'host' => $item->getProperty('host') ?? '',
-                    'resolved' => gethostbyaddr($item->getProperty('host')) ?? '',
-                    'time' => $item->getProperty('time') ?? '',
-                    'time_level' => $time < 50 ? 'good' : ($time < 100 ? 'warning' : 'high'),
-                    'ttl' => $item->getProperty('ttl') ?? '',
-                    'bytes' => $item->getProperty('bytes') ?? '',
-                ];
-            }, $pingResult);
 
             $traceData = array_map(function ($item) {
                 $time = floatval(str_replace('ms', '', $item->getProperty('time')));
                 $host = $item->getProperty('host') ?? '';
                 return [
-                    'hop' => $item->getProperty('hop') ?? '',
+                    'hop' => $item->getProperty('hop'),
                     'host' => $host,
-                    'resolved' => $host ? gethostbyaddr($host) : '',
-                    'time' => $item->getProperty('time') ?? '',
+                    'resolved' => $host ? @gethostbyaddr($host) : '',
+                    'time' => $item->getProperty('time'),
                     'time_level' => $time < 50 ? 'good' : ($time < 100 ? 'warning' : 'high'),
                 ];
             }, $traceResult);
-
-            $response['status'] = true;
-            $response['msg'] = 'Diagnostics complete';
-            $response['data']['ping'] = $pingData;
-            $response['data']['traceroute'] = $traceData;
         } catch (\Throwable $e) {
-            $response['msg'] = 'Diagnostic failed: ' . $e->getMessage();
-            Log::error('MIKROTIK_DIAGNOSE_ERROR', [
-                'address' => $address,
-                'error' => $e->getMessage(),
-            ]);
+            Log::warning('MIKROTIK_TRACE_TIMEOUT', ['error' => $e->getMessage()]);
         }
 
-        return $response;
+        $response['status'] = true;
+        $response['msg'] = 'Diagnostics complete';
+        $response['data']['ping'] = $pingData;
+        $response['data']['traceroute'] = $traceData;
+    } catch (\Throwable $e) {
+        $response['msg'] = 'Diagnostic failed: ' . $e->getMessage();
+        Log::error('MIKROTIK_DIAGNOSE_ERROR', [
+            'address' => $address,
+            'error' => $e->getMessage(),
+        ]);
     }
+
+    return $response;
+}
+
+
+public static function diagnoseStreamed(string $address): StreamedResponse
+{
+    return response()->stream(function () use ($address) {
+        if (!self::mikrotik_enabled()) {
+            echo "data: " . json_encode(['error' => 'Mikrotik not enabled']) . "\n\n";
+            ob_flush();
+            flush();
+            return;
+        }
+
+        self::connect();
+        if (!self::$connected) {
+            echo "data: " . json_encode(['error' => 'Could not connect to router']) . "\n\n";
+            ob_flush();
+            flush();
+            return;
+        }
+
+        try {
+            // Send PING
+            $pingReq = new Request('/ping');
+            $pingReq->setArgument('address', $address);
+            $pingReq->setArgument('count', 4);
+
+            $pingResults = self::$client->sendSync($pingReq)->getAllOfType(Response::TYPE_DATA);
+            foreach ($pingResults as $item) {
+                $ping = [
+                    'host' => $item->getProperty('host'),
+                    'time' => $item->getProperty('time'),
+                    'ttl' => $item->getProperty('ttl'),
+                    'bytes' => $item->getProperty('bytes'),
+                ];
+                echo "data: " . json_encode(['ping' => $ping]) . "\n\n";
+                ob_flush();
+                flush();
+                usleep(300000); // Optional small delay
+            }
+
+            // Send Traceroute
+            $traceReq = new Request('/tool/traceroute');
+            $traceReq->setArgument('address', $address);
+            $traceResults = self::$client->sendSync($traceReq)->getAllOfType(Response::TYPE_DATA);
+
+            foreach ($traceResults as $hop) {
+                $trace = [
+                    'hop' => $hop->getProperty('hop'),
+                    'host' => $hop->getProperty('host'),
+                    'time' => $hop->getProperty('time'),
+                ];
+                echo "data: " . json_encode(['traceroute' => $trace]) . "\n\n";
+                ob_flush();
+                flush();
+                usleep(300000);
+            }
+
+            echo "data: " . json_encode(['done' => true]) . "\n\n";
+            ob_flush();
+            flush();
+        } catch (\Throwable $e) {
+            echo "data: " . json_encode(['error' => $e->getMessage()]) . "\n\n";
+            ob_flush();
+            flush();
+        }
+    }, 200, [
+        'Content-Type' => 'text/event-stream',
+        'Cache-Control' => 'no-cache',
+        'Connection' => 'keep-alive',
+    ]);
+}
+
 
 
     public static function reboot()
