@@ -687,45 +687,94 @@ class Mikrotik
 
 
     public static function changeProfile($params = array()): array
-{
-    $response = ['status' => false, 'msg' => ''];
-
-    if (!self::mikrotik_enabled()) {
-        $response['status'] = true;
-        $response['msg'] = 'Mikrotik configuration not set.';
-        return $response;
-    }
-
-    self::connect();
-    if (!self::$connected) {
-        $response['msg'] = 'Could not connect to router';
-        return $response;
-    }
-
-    if (!empty($params['profile']) && !empty($params['id'])) {
-        $request = new Request('/ppp/secret/set');
-        $request->setArgument('.id', $params['id']);
-        $request->setArgument('profile', $params['profile']);
-
-        $requestResponse = self::$client->sendSync($request);
-
-        Log::error('MIKROTIK_CHANGE_CUSTOMER_PROFILE', [
-            'customer-id' => $params['customerID'] ?? null,
-            'response' => $requestResponse
-        ]);
-
-        if ($requestResponse->getType() === Response::TYPE_FINAL) {
+    {
+        $response = ['status' => false, 'msg' => ''];
+    
+        if (!self::mikrotik_enabled()) {
             $response['status'] = true;
-            $response['msg'] = 'Customer package has been successfully changed!';
-        } else {
-            $response['msg'] = 'Sorry! cannot change package';
+            $response['msg'] = 'Mikrotik configuration not set.';
+            return $response;
         }
-    } else {
-        $response['msg'] = 'Customer package or ID not provided.';
+    
+        self::connect();
+        if (!self::$connected) {
+            $response['msg'] = 'Could not connect to router';
+            return $response;
+        }
+    
+        if (!empty($params['profile']) && !empty($params['id'])) {
+            $request = new Request('/ppp/secret/set');
+            $request->setArgument('.id', $params['id']);
+            $request->setArgument('profile', $params['profile']);
+    
+            $requestResponse = self::$client->sendSync($request);
+    
+            Log::error('MIKROTIK_CHANGE_CUSTOMER_PROFILE', [
+                'customer-id' => $params['customerID'] ?? null,
+                'response' => $requestResponse
+            ]);
+    
+            if ($requestResponse->getType() === Response::TYPE_FINAL) {
+                $response['status'] = true;
+                $response['msg'] = 'Customer package has been successfully changed!';
+            } else {
+                $response['msg'] = 'Sorry! cannot change package';
+            }
+        } else {
+            $response['msg'] = 'Customer package or ID not provided.';
+        }
+    
+        return $response;
     }
 
-    return $response;
-}
+    public static function bindStaticIp($customerID, $remoteAddress): array
+    {
+        $response = ['status' => false, 'msg' => 'Could not bind the IP'];
+        try{
+            if (!self::mikrotik_enabled()) {
+                $response['status'] = true;
+                $response['msg'] = 'Mikrotik configuration not set.';
+                return $response;
+            }
+        
+            self::connect();
+            if (!self::$connected) {
+                $response['msg'] = 'Could not connect to router';
+                return $response;
+            }
+
+            if (!empty($customerID) && !empty($remoteAddress)) {
+                $info = self::getByName($customerID);
+                $mktikId = $info['data']->getProperty('.id');
+        
+                if($mktikId) {
+                    $request = new Request('/ppp/secret/set');
+                    $request->setArgument('.id', $mktikId);
+                    $request->setArgument('remote-address', $customerID);
+            
+                    $requestResponse = self::$client->sendSync($request);
+            
+                    Log::error('MIKROTIK_BIND_STATIC_IP', [
+                        'customer-id' => $customerID ?? null,
+                        'response' => $requestResponse
+                    ]);
+            
+                    if ($requestResponse->getType() === Response::TYPE_FINAL) {
+                        $response['status'] = true;
+                        $response['msg'] = 'Customer IP bind has been successful!';
+                    } else {
+                        $response['msg'] = 'Sorry! cannot bind IP';
+                    }
+                }
+            } else {
+                $response['msg'] = 'Customer ID or Remote Address not provided.';
+            }
+        } catch(\Exception $exception) {
+            
+        }
+
+        return response;
+    }
 
 
     private static function mikrotik_enabled(): bool
