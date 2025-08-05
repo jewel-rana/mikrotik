@@ -26,6 +26,7 @@ class Mikrotik
     protected static $client;
     public static bool $customer_exist = false;
     private static bool $connected = false;
+    private static book $mikrotik_enabled = false;
 
     public function __construct()
     {
@@ -71,21 +72,26 @@ class Mikrotik
             self::$user = $router['mktik_user'];
             self::$password = $router['mktik_password'];
             self::$service = $router['mktik_interface'] ?? 'pppoe';
+            self::$mikrotik_enabled = (bool) $router['status'];
         }
     }
 
     public static function connect()
     {
-        if (!empty(self::$host) && !empty(self::$user) && !empty(self::$password)) {
+        if (!empty(self::$host) && !empty(self::$user) && !empty(self::$password) && self::$mikrotik_enabled) {
             try {
                 self::$client = new Client(self::$host, self::$user, self::$password, self::$port);
                 Log::debug('MIKROTIK_CLIENT', [
-                    'client' => self::$client
+                    'client' => self::$client,
+                    'host' => self::$host,
+                    'port' => self::$port
                 ]);
                 self::$connected = true;
             } catch (\Exception $exception) {
                 Log::error($exception->getMessage(), [
-                    'keyword' => 'MIKROTIK_CONNECTION_EXCEPTION'
+                    'keyword' => 'MIKROTIK_CONNECTION_EXCEPTION',
+                    'host' => self::$host,
+                    'port' => self::$port
                 ]);
                 self::$connected = false;
             }
@@ -139,11 +145,15 @@ class Mikrotik
 {
     $data = (object) [];
 
-    if (self::mikrotik_enabled()) {
+    if (self::$mikrotik_enabled) {
         self::connect();
 
         if (!self::$connected) {
-            Log::error('MIKROTIK_RESOURCE_ERROR', ['msg' => 'Client not connected']);
+            Log::error('MIKROTIK_RESOURCE_ERROR', [
+                'msg' => 'Client not connected',
+                'host' => self::$host,
+                'port' => self::$port
+            ]);
             return $data;
         }
 
@@ -154,6 +164,8 @@ class Mikrotik
             Log::error('MIKROTIK_RESOURCE_EXCEPTION', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'host' => self::$host,
+                'port' => self::$port
             ]);
         }
     }
@@ -178,7 +190,9 @@ class Mikrotik
                 $response['data'] = $util->setMenu('/log')->getAll();
             } catch (Exception $e) {
                 Log::error($exception->getMessage(), [
-                    'keyword' => 'MIKROTIK_LOG_EXCEPTION'
+                    'keyword' => 'MIKROTIK_LOG_EXCEPTION',
+                    'host' => self::$host,
+                    'port' => self::$port
                 ]);
 
                 $response['msg'] = 'An error occured to collect system user logs';
@@ -265,7 +279,9 @@ class Mikrotik
 
                 Log::error('MIKROTIK_GET_USER_INFO', [
                     'user-id' => $id,
-                    'response' => $info
+                    'response' => $info,
+                    'host' => self::$host,
+                    'port' => self::$port
                 ]);
                 if (!empty($info[0])) :
                     $response['status'] = true;
@@ -295,9 +311,11 @@ class Mikrotik
                 $customer = new Request('/ppp/active/print');
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
-                Log::error('MIKROTIK_GET_ACTIVE_USER_INFO', [
+                Log::debug('MIKROTIK_GET_ACTIVE_USER_INFO', [
                     'user-name' => $name,
-                    'response' => $info
+                    'response' => $info,
+                    'host' => self::$host,
+                    'port' => self::$port
                 ]);
                 $mktikId = $info[0]->getProperty('.id');
                 if (!empty($mktikId)) {
@@ -330,11 +348,13 @@ class Mikrotik
                 $customer->setArgument('.proplist', '.id,name,profile,disabled');
                 $customer->setQuery(Query::where('name', $name));
                 $info = self::$client->sendSync($customer);
-                if (!empty($info[0])) :
                     Log::error('MIKROTIK_GET_BY_NAME_USER_INFO', [
                         'user-name' => $name,
-                        'response' => $info
+                        'response' => $info,
+                        'host' => self::$host,
+                        'port' => self::$port
                     ]);
+                if (!empty($info[0])) :
                     $response['status'] = true;
                     $response['data'] = $info[0];
                 endif;
@@ -370,7 +390,9 @@ class Mikrotik
                 if (!empty($info[0])) :
                     Log::error('MIKROTIK_GET_SERVER_NAME', [
                         'name' => $name,
-                        'response' => $info
+                        'response' => $info,
+                        'host' => self::$host,
+                        'port' => self::$port
                     ]);
                     $response['status'] = true;
                     $response['data'] = $info[0];
@@ -395,13 +417,14 @@ class Mikrotik
 
                 self::connect();
                 if (!self::$connected) {
-                    throw new \Exception("Router not connected", 1);
+                    $response['msg'] = 'Could not connect to router';
+                    return $response;
                 }
                 $user = new Request('/ppp/secret/add');
                 $user->setArgument('name', $customer['customerID']);
                 $user->setArgument('profile', $profile);
                 $user->setArgument('password', $customer['password']);
-                $user->setArgument('service', self::$service);
+                $user->setArgument('service', self::$service ?? 'ppoe');
                 // if ($customer->remote_ip) {
                 //     $user->setArgument('remote_address', $customer->remote_ip);
                 // }
@@ -418,21 +441,24 @@ class Mikrotik
                     'customer-id' => $customer['customerID'],
                     'response' => $requestResponse,
                     'response-type' => $requestResponse->getType(),
-                    'final-type' => Response::TYPE_FINAL
+                    'final-type' => Response::TYPE_FINAL,
+                    'host' => self::$host,
+                    'port' => self::$port
                 ]);
 
                 $response['data'] = $requestResponse;
 
-                if ($requestResponse->getType() !== Response::TYPE_FINAL) {
-                    $response['msg'] = 'Sorry! cannot create customer';
-                } else {
-                    self::$client->loop();
-                    $customerAcc = self::getByName($customer['customerID']);
-                    $response['data'] = $customerAcc['status'] ? $customerAcc['data'] : null;
+                if ($requestResponse->getType() == Response::TYPE_FINAL) {
                     $response['status'] = true;
                     $response['msg'] = 'Customer has been successfully created';
                 }
             } catch (TrapException $e) {
+                Log::error($e->getMessage(), [
+                    'keyword' => 'CUSTOMER_CREATE_EXCEPTION',
+                    'customerID' => $customer['customerID'],
+                    'host' => self::$host,
+                    'port' => self::$port
+                ]);
                 $response['msg'] = $e->getMessage();
             }
         } else {
@@ -476,10 +502,10 @@ class Mikrotik
                         $response['msg'] = 'Mikrotik! Customer cannot be enabled.';
                     }
                 } else {
-                    $response['msg'] = 'Could not find customer into router';
+                    $response = self::create($customer);
                 }
             } else {
-                $response['msg'] = 'Customer not found.';
+                $response['msg'] = 'Customer not info is not provided.';
             }
         } else {
             $response['status'] = true;
@@ -524,13 +550,11 @@ class Mikrotik
             Log::info('MIKROTIK_DISABLE_SECRET', [
                 'customer-id' => $customer['customerID'],
                 'response' => $disableRes,
+                      'host' => self::$host,
+                      'port' => self::$port
             ]);
 
-            if (!($disableRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
-                $response['msg'] = 'Unrecognized response from router: ' . $customer['router_id'];
-            } else {
-
-                if ($disableRes->getType() === Response::TYPE_FINAL) {
+                if ($disableRes->getType() == Response::TYPE_FINAL) {
                     // Attempt to remove from active sessions (if connected)
                     $activeCon = self::getActive($customer['customerID']);
                     $activeId = !empty($activeCon['data']) ? $activeCon['data']->getProperty('.id') : null;
@@ -545,12 +569,16 @@ class Mikrotik
                             Log::info('MIKROTIK_REMOVE_ACTIVE', [
                                 'customer-id' => $customer['customerID'],
                                 'response' => $activeRes,
+                                'host' => self::$host,
+                                'port' => self::$port
                             ]);
 
                             if (!($activeRes instanceof \PEAR2\Net\RouterOS\ResponseCollection)) {
                                 Log::warning('Unrecognized response from /ppp/active/remove', [
                                     'customer-id' => $customer['customerID'],
                                     'class' => is_object($activeRes) ? get_class($activeRes) : gettype($activeRes),
+                                    'host' => self::$host,
+                                    'port' => self::$port
                                 ]);
                             }
                         } catch (\Throwable $e) {
@@ -558,12 +586,16 @@ class Mikrotik
                                 'customer-id' => $customer['customerID'],
                                 'error' => $e->getMessage(),
                                 'trace' => $e->getTraceAsString(),
+                                'host' => self::$host,
+                                'port' => self::$port
                             ]);
                         }
                     } else {
                         Log::info('Customer is not actively connected; skipping /ppp/active/remove', [
                             'customer-id' => $customer['customerID'],
                             'active-id' => $activeId,
+                            'host' => self::$host,
+                            'port' => self::$port
                         ]);
                     }
 
@@ -572,12 +604,11 @@ class Mikrotik
                 } else {
                     $response['msg'] = 'Mikrotik responded with an unexpected type.';
                     foreach ($disableRes as $r) {
-                        if ($r->getType() === '!trap') {
+                        if ($r->getType() == '!trap') {
                             $response['msg'] .= ' Error: ' . ($r->getProperty('message') ?? 'Unknown');
                         }
                     }
                 }
-            }
         } catch (\Throwable $e) {
             Log::error('Exception during disable()', [
                 'customer-id' => $customer['customerID'],
@@ -616,7 +647,9 @@ class Mikrotik
                     $requestResponse = self::$client->sendSync($request);
                     Log::error('MIKROTIK_CHANGE_CUSTOMER_NAME', [
                         'customer-id' => $params['name'],
-                        'response' => $requestResponse->getType()
+                        'response' => $requestResponse->getType(),
+                        'host' => self::$host,
+                        'port' => self::$port
                     ]);
 
                     if ($requestResponse->getType() == Response::TYPE_FINAL) {
@@ -664,7 +697,9 @@ class Mikrotik
                     Log::error('MIKROTIK_CHANGE_PASSWORD', [
                         'customer-id' => $params['customerID'],
                         'password' => $params['password'],
-                        'response' => $requestResponse
+                        'response' => $requestResponse,
+                        'host' => self::$host,
+                        'port' => self::$port
                     ]);
                     if ($requestResponse->getType() == Response::TYPE_FINAL) {
                         $response['status'] = true;
@@ -711,10 +746,12 @@ class Mikrotik
     
             Log::error('MIKROTIK_CHANGE_CUSTOMER_PROFILE', [
                 'customer-id' => $params['customerID'] ?? null,
-                'response' => $requestResponse
+                'response' => $requestResponse,
+                'host' => self::$host,
+                'port' => self::$port
             ]);
     
-            if ($requestResponse->getType() === Response::TYPE_FINAL) {
+            if ($requestResponse->getType() == Response::TYPE_FINAL) {
                 $response['status'] = true;
                 $response['msg'] = 'Customer package has been successfully changed!';
             } else {
@@ -776,13 +813,9 @@ class Mikrotik
         return response;
     }
 
-
     private static function mikrotik_enabled(): bool
     {
-        if (getOption('mikrotik_access')) {
-            return true;
-        }
-        return false;
+        return self::$mikrotik_enabled;
     }
 
     public static function _exist($params): bool
