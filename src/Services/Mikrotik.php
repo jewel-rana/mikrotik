@@ -26,7 +26,7 @@ class Mikrotik
     protected static $client;
     public static bool $customer_exist = false;
     private static bool $connected = false;
-    private static book $mikrotik_enabled = false;
+    private static bool $mikrotik_enabled = false;
 
     public function __construct()
     {
